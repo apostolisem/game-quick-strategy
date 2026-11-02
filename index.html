@@ -31,7 +31,11 @@
     justify-content: center;
     align-items: flex-start;
   }
-  #stage { position: relative; flex: 0 1 960px; min-width: 0; }
+  #stage {
+    position: relative;
+    flex: none;
+    width: min(100%, max(360px, calc((100vh - 38px) * 2 / 3)));
+  }
   canvas#c {
     width: 100%;
     height: auto;
@@ -59,7 +63,7 @@
     text-shadow: 0 2px 0 #000;
   }
   .sub { margin: 0 0 12px; color: var(--muted); font-size: 12px; font-style: italic; }
-  h2 {
+  #panel h2 {
     font-size: 13px;
     text-transform: uppercase;
     letter-spacing: 2px;
@@ -92,6 +96,8 @@
   }
   button:hover:not(:disabled) { background: #5c4b2e; }
   button:disabled { opacity: .45; cursor: not-allowed; }
+  button.primary { background: #5d2e1f; border-color: var(--gold); font-weight: bold; }
+  button.primary:hover:not(:disabled) { background: #74392a; }
   .shop-item {
     display: flex;
     gap: 8px;
@@ -128,39 +134,67 @@
   #info .row button { flex: 1; }
   #info p { margin: 0 0 6px; color: var(--muted); line-height: 1.4; }
   .controls { display: flex; gap: 6px; margin-top: 12px; }
-  #startBtn {
-    flex: 1;
-    background: #5d2e1f;
-    border-color: #a0533a;
-    font-weight: bold;
-  }
-  #startBtn:hover:not(:disabled) { background: #74392a; }
-  #nextWave { font-size: 12px; color: var(--muted); margin-top: 8px; min-height: 16px; }
+  #startBtn { flex: 1; }
+  #nextWave { font-size: 12px; color: var(--muted); margin-top: 8px; min-height: 16px; line-height: 1.4; }
+  #retreatBtn { width: 100%; margin-top: 10px; font-size: 12px; background: transparent; }
   .help { font-size: 11px; color: var(--muted); line-height: 1.5; margin: 10px 0 0; }
   .help kbd { border: 1px solid #7a6440; border-radius: 3px; padding: 0 3px; font-size: 10px; }
 
+  /* Overlays: campaign, briefing, results */
   #overlay {
-    position: absolute; inset: 0;
+    position: fixed; inset: 0; z-index: 10;
     display: flex; align-items: center; justify-content: center;
-    background: rgba(5,8,3,.55);
-    border-radius: 8px;
+    padding: 16px;
+    overflow: auto;
+    background: rgba(5,8,3,.72);
   }
+  #overlay[hidden] { display: none; }
   #overlay .card {
     background: linear-gradient(180deg, #3a3122, #2a2419);
     border: 2px solid var(--gold);
     border-radius: 12px;
-    padding: 24px 28px;
-    max-width: 460px;
-    margin: 16px;
+    padding: 22px 26px;
+    width: 100%;
+    max-width: 480px;
+    margin: auto;
     text-align: center;
     box-shadow: 0 20px 60px rgba(0,0,0,.7);
   }
-  #overlay h2 {
-    font-size: 26px; letter-spacing: 1px; text-transform: none;
-    color: var(--gold); border: none; margin: 0 0 10px;
+  #overlay .card.wide { max-width: 860px; }
+  #overlay h2 { font-size: 26px; letter-spacing: 1px; color: var(--gold); margin: 0 0 8px; }
+  #overlay h3 {
+    font-size: 14px; text-transform: uppercase; letter-spacing: 2px; color: var(--muted);
+    margin: 20px 0 10px; display: flex; justify-content: space-between; align-items: baseline;
+    border-bottom: 1px solid var(--border); padding-bottom: 4px; text-align: left; gap: 8px; flex-wrap: wrap;
   }
-  #overlay p { color: var(--ink); line-height: 1.55; margin: 0 0 18px; }
-  #overlay button { font-size: 16px; padding: 10px 22px; background: #5d2e1f; border-color: var(--gold); }
+  #overlay h3 span { text-transform: none; letter-spacing: 0; color: var(--gold); font-size: 13px; }
+  #overlay p { color: var(--ink); line-height: 1.55; margin: 0 0 14px; }
+  #overlay .muted { color: var(--muted); font-size: 13px; }
+  .btn-row { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; margin-top: 6px; }
+  .btn-row button { font-size: 15px; padding: 10px 18px; }
+  .maps { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; }
+  .map-card { padding: 0; overflow: hidden; text-align: left; display: flex; flex-direction: column; }
+  .map-card img { width: 100%; aspect-ratio: 2 / 3; display: block; object-fit: cover; }
+  .map-card .meta { padding: 8px 10px 10px; }
+  .map-card strong { display: block; font-size: 14px; }
+  .map-card small { display: block; color: var(--muted); font-size: 11px; margin-top: 2px; }
+  .map-card:disabled img { filter: grayscale(1) brightness(.35); }
+  .map-card:disabled { opacity: .8; }
+  .stars { color: var(--gold); letter-spacing: 2px; font-size: 15px; }
+  .stars .off { color: #5b4a2c; }
+  .big-stars { font-size: 52px; letter-spacing: 8px; margin: 4px 0 10px; }
+  .perks { display: grid; gap: 6px; text-align: left; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
+  .perk {
+    display: flex; align-items: center; gap: 10px;
+    background: rgba(0,0,0,.25); border: 1px solid var(--border); border-radius: 6px; padding: 6px 10px;
+  }
+  .perk > div { flex: 1; }
+  .perk small { display: block; color: var(--muted); font-size: 11px; }
+  .perk .pips { color: var(--gold); letter-spacing: 2px; }
+  .perk .pips .off { color: #5b4a2c; }
+  .perk button { padding: 4px 10px; font-weight: bold; }
+  .brief-img { max-width: 100%; max-height: 42vh; border-radius: 8px; border: 1px solid var(--border); margin: 0 auto 12px; display: block; }
+  .foes { background: rgba(0,0,0,.25); border-left: 3px solid var(--danger); padding: 8px 10px; text-align: left; border-radius: 4px; }
 
   @media (max-width: 960px) {
     #game { flex-direction: column; align-items: stretch; }
@@ -171,19 +205,12 @@
 <body>
 <div id="game">
   <div id="stage">
-    <canvas id="c" width="960" height="640"></canvas>
-    <div id="overlay">
-      <div class="card">
-        <h2 id="ovTitle">The Forest Pass</h2>
-        <p id="ovText">Monsters gather beyond the edge of the world. The only road to the King's castle runs through this clearing in the forest.<br><br>As <b>Hand of the King</b>, place weapons along the pathway. They fire on their own at anything that walks past. Hold out for 15 waves.</p>
-        <button id="ovBtn">Take command</button>
-      </div>
-    </div>
+    <canvas id="c" width="640" height="960"></canvas>
   </div>
 
   <aside id="panel">
     <h1>Hand of the King</h1>
-    <p class="sub">Defend the forest pass</p>
+    <p class="sub" id="mapName">Defend the forest pass</p>
 
     <div class="stats">
       <div class="stat"><div class="label">Gold</div><div class="val" id="gold">0</div></div>
@@ -198,75 +225,161 @@
     <div id="info"></div>
 
     <div class="controls">
-      <button id="startBtn">Start Wave</button>
+      <button id="startBtn" class="primary">Start Wave</button>
       <button id="speedBtn" title="Game speed">1×</button>
       <button id="pauseBtn" title="Pause (P)">❚❚</button>
     </div>
     <div id="nextWave"></div>
+    <button id="retreatBtn">Retreat to campaign map</button>
 
     <p class="help">
       <kbd>1</kbd><kbd>2</kbd><kbd>3</kbd> pick a weapon · click the light grass to place it<br>
       <kbd>Shift</kbd>+click places several · <kbd>Esc</kbd>/right-click cancels<br>
       Click a weapon to upgrade or sell it (<kbd>U</kbd> upgrades)<br>
-      <kbd>Space</kbd> starts the next wave · <kbd>P</kbd> pauses
+      <kbd>Space</kbd> starts a wave, or calls the next one early for bonus gold · <kbd>P</kbd> pauses
     </p>
   </aside>
 </div>
+
+<div id="overlay"><div class="card" id="ovCard"></div></div>
 
 <script>
 // ---------------------------------------------------------------------------
 // Config
 // ---------------------------------------------------------------------------
-const TILE = 40, COLS = 24, ROWS = 16;
+const TILE = 40, COLS = 16, ROWS = 24;
 const W = COLS * TILE, H = ROWS * TILE;
-const START_GOLD = 160;
-const CASTLE_HP = 20;
-const MAX_WAVES = 15;
+const WAVES = 10;
+const BASE_CASTLE_HP = 20;
+const SAVE_KEY = 'hand-of-the-king-v1';
 
-// Path waypoints in tile coordinates; starts off-screen on the left (the void).
-const WAYPOINTS = [[-2, 8], [5, 8], [5, 3], [11, 3], [11, 12], [17, 12], [17, 7], [21, 7]];
-const CASTLE = { x: 846, y: 206, w: 108, h: 188 };
+const SEASONS = {
+  summer: {
+    label: 'Summer forest',
+    floor: '#2b5523', floorDots: ['18,38,14', '62,104,46'], clearing: '#5a9443',
+    blades: ['rgba(120,180,80,.5)', 'rgba(50,95,35,.5)'],
+    flowers: ['#f4e27a', '#ffffff', '#e98bc0', '#9fc4ff'],
+    pathEdge: '#6a4f30', path: '#a5814f', pathLight: 'rgba(255,230,180,.12)',
+    trees: [['#1f4a1c', '#2e6a27', '#45923a'], ['#264f1d', '#3a7329', '#559a3c']],
+    pines: ['#173d1a', '#1f5223', '#2b6a2c'], pineChance: 0.28,
+  },
+  autumn: {
+    label: 'Autumn woods',
+    floor: '#4b4422', floorDots: ['50,35,15', '140,110,50'], clearing: '#8b9446',
+    blades: ['rgba(190,180,90,.5)', 'rgba(110,100,40,.5)'],
+    flowers: ['#d9642c', '#e8b84a', '#a8401e'],
+    pathEdge: '#5e4428', path: '#9c7748', pathLight: 'rgba(255,220,160,.1)',
+    trees: [['#7a2e10', '#b04a1a', '#e07a2c'], ['#7a5a10', '#b88a1c', '#e8c040'], ['#6a2418', '#a03a22', '#d0603a']],
+    pines: ['#1f3a1c', '#2a4a24', '#3a5e2e'], pineChance: 0.2, leaves: true,
+  },
+  winter: {
+    label: 'Snowy pines',
+    floor: '#cfdbe4', floorDots: ['150,170,190', '255,255,255'], clearing: '#e9f0f5',
+    blades: null,
+    flowers: ['#ffffff', '#c8d8e8'],
+    pathEdge: '#5d5248', path: '#8f8172', pathLight: 'rgba(255,255,255,.15)',
+    trees: [['#1d3b2a', '#2a5038', '#3d6a4a']],
+    pines: ['#173226', '#20412f', '#2d553d'], pineChance: 0.85, snow: true,
+  },
+  swamp: {
+    label: 'Misty swamp',
+    floor: '#28351f', floorDots: ['15,25,12', '70,90,45'], clearing: '#4f6536',
+    blades: ['rgba(110,140,70,.5)', 'rgba(40,60,30,.5)'],
+    flowers: ['#c9d36a', '#8fb0a0'],
+    pathEdge: '#3f3424', path: '#6f5d3c', pathLight: 'rgba(220,200,150,.08)',
+    trees: [['#26341a', '#3a4c24', '#566a33'], ['#2a3a22', '#405438', '#5f7550']],
+    pines: ['#1a2a18', '#24391f', '#304a28'], pineChance: 0.15, water: true,
+  },
+};
+
+// Roads start off-screen below the bottom edge (the void) and climb to the castle gate at the top.
+// The last two waypoints share a column: that column is where the gate (and castle) sits.
+const LEVELS = [
+  {
+    name: 'Greenwood Pass', season: 'summer', gold: 160, diff: 1.0,
+    path: [[8, 25], [8, 19], [3, 19], [3, 13], [12, 13], [12, 8], [8, 8], [8, 4]],
+    roster: ['goblin', 'wolf', 'orc'], midBoss: false, finalBosses: 1,
+    desc: 'A quiet summer road through the Greenwood. Goblins, wolves and orcs are testing the King\'s defences. A good place to learn the ropes.',
+    newFoes: 'Goblins, Wolves and Orcs. An Ogre Warlord leads the final wave.',
+  },
+  {
+    name: 'Amberleaf Hollow', season: 'autumn', gold: 190, diff: 1.5,
+    path: [[3, 25], [3, 17], [12, 17], [12, 11], [3, 11], [3, 6], [10, 6], [10, 4]],
+    roster: ['goblin', 'wolf', 'orc', 'troll', 'knight'], midBoss: true, finalBosses: 1,
+    desc: 'Falling leaves hide the road as it winds through the hollow. The enemy has brought heavier troops.',
+    newFoes: '<b>Armored Knights</b>: their armor blocks part of every hit, so weak, fast shots barely scratch them. Catapults and upgraded weapons punch through. <b>Trolls</b> are slow but very tough.',
+  },
+  {
+    name: 'Frostpine Ridge', season: 'winter', gold: 230, diff: 1.85,
+    path: [[2, 25], [2, 20], [13, 20], [13, 16], [2, 16], [2, 12], [13, 12], [13, 8], [4, 8], [4, 4]],
+    roster: ['goblin', 'wolf', 'orc', 'troll', 'knight', 'bat'], midBoss: true, finalBosses: 2,
+    desc: 'A long road that switches back and forth up the snowy ridge. More road means more time to shoot, and more monsters to shoot at.',
+    newFoes: '<b>Bats</b> fly above the road. Catapult stones can\'t hit them, so keep Archers and Frost Mages ready.',
+  },
+  {
+    name: 'Mirefen Crossing', season: 'swamp', gold: 270, diff: 1.25,
+    path: [[12, 25], [12, 16], [4, 16], [4, 9], [8, 9], [8, 4]],
+    roster: ['goblin', 'wolf', 'orc', 'troll', 'knight', 'bat'], midBoss: true, finalBosses: 2,
+    desc: 'A short road across the bog leaves little room for error. Every kind of monster attacks here, and two Warlords lead the final wave.',
+    newFoes: 'Everything at once. Plan your kill zone carefully: the road is short.',
+  },
+];
 
 const TOWERS = {
   archer: {
-    name: 'Archer Tower', cost: 50, range: 130, damage: 10, rate: 0.55,
-    proj: 'arrow', desc: 'Fast shots at a single target.',
+    name: 'Archer Tower', cost: 50, range: 130, damage: 10, rate: 0.55, air: true, perk: 'arrows',
+    proj: 'arrow', desc: 'Fast shots at a single target. Hits flyers.',
   },
   catapult: {
-    name: 'Catapult', cost: 110, range: 165, damage: 30, rate: 2.2, splash: 55,
-    proj: 'rock', desc: 'Slow, heavy stones that hit an area.',
+    name: 'Catapult', cost: 110, range: 165, damage: 30, rate: 2.2, splash: 55, air: false, perk: 'stones',
+    proj: 'rock', desc: 'Heavy stones that hit an area. Ground only.',
   },
   mage: {
-    name: 'Frost Mage', cost: 80, range: 110, damage: 5, rate: 0.9, slow: 0.45, slowDur: 1.6,
-    proj: 'frost', desc: 'Weak bolts that slow monsters down.',
+    name: 'Frost Mage', cost: 80, range: 110, damage: 5, rate: 0.9, slow: 0.45, slowDur: 1.6, air: true, perk: 'frost',
+    proj: 'frost', desc: 'Weak bolts that slow monsters. Hits flyers.',
   },
 };
 const MAX_LEVEL = 3;
 
 const MONSTERS = {
-  goblin: { name: 'Goblin', hp: 28,   speed: 62, reward: 4,  dmg: 1,  r: 9,  color: '#7cc444' },
-  wolf:   { name: 'Wolf',   hp: 40,   speed: 95, reward: 6,  dmg: 1,  r: 10, color: '#8d8d93' },
-  orc:    { name: 'Orc',    hp: 75,   speed: 42, reward: 8,  dmg: 2,  r: 12, color: '#56782b' },
-  troll:  { name: 'Troll',  hp: 260,  speed: 26, reward: 20, dmg: 4,  r: 16, color: '#7d6fa0' },
-  ogre:   { name: 'Ogre Warlord', hp: 1100, speed: 20, reward: 80, dmg: 10, r: 22, color: '#a8583a', boss: true },
+  goblin: { name: 'Goblin', plural: 'Goblins', hp: 28,  speed: 62, reward: 4,  dmg: 1, r: 9,  color: '#7cc444' },
+  wolf:   { name: 'Wolf',   plural: 'Wolves',  hp: 40,  speed: 95, reward: 6,  dmg: 1, r: 10, color: '#8d8d93' },
+  orc:    { name: 'Orc',    plural: 'Orcs',    hp: 75,  speed: 42, reward: 8,  dmg: 2, r: 12, color: '#56782b' },
+  troll:  { name: 'Troll',  plural: 'Trolls',  hp: 260, speed: 26, reward: 20, dmg: 4, r: 16, color: '#7d6fa0' },
+  knight: { name: 'Armored Knight', plural: 'Armored Knights', hp: 110, speed: 34, reward: 12, dmg: 3, r: 12, color: '#9aa3ad', armor: 7 },
+  bat:    { name: 'Bat',    plural: 'Bats',    hp: 32,  speed: 78, reward: 6,  dmg: 1, r: 9,  color: '#4b3a5c', fly: true },
+  ogre:   { name: 'Ogre Warlord', plural: 'Ogre Warlords', hp: 1100, speed: 20, reward: 80, dmg: 10, r: 22, color: '#a8583a', boss: true },
 };
 
-function hpScale(n) { const k = n - 1; return 1 + 0.14 * k + 0.012 * k * k; }
+const PERKS = [
+  { id: 'arrows',   name: 'Sharp Arrows',   desc: '+12% Archer damage per rank' },
+  { id: 'stones',   name: 'Heavy Stones',   desc: '+12% Catapult damage per rank' },
+  { id: 'frost',    name: 'Deep Frost',     desc: '+15% Frost Mage damage & slow time' },
+  { id: 'treasury', name: 'Royal Treasury', desc: '+30 starting gold per rank' },
+  { id: 'walls',    name: 'Stone Walls',    desc: '+3 castle health per rank' },
+];
+const PERK_MAX = 3;
 
-function buildWave(n) {
+function hpScale(n) { const k = n - 1; return (1 + 0.2 * k + 0.015 * k * k) * LEVEL.diff; }
+
+function buildWave(n, lvl = LEVEL) {
+  const has = t => lvl.roster.includes(t);
   const groups = [];
   const add = (type, count, gap) => { for (let i = 0; i < count; i++) groups.push({ type, gap }); };
-  add('goblin', 4 + n * 2, 0.8);
-  if (n >= 2) add('orc', Math.floor(n * 1.2), 1.1);
-  if (n >= 3) add('wolf', n - 1, 0.5);
-  if (n >= 4) add('troll', Math.floor((n - 2) / 2), 2.0);
+  add('goblin', 3 + n * 2, 0.8);
+  if (n >= 2) add('orc', Math.floor(n * 1.1), 1.1);
+  if (n >= 3 && has('wolf')) add('wolf', n - 1, 0.5);
+  if (n >= 4 && has('troll')) add('troll', Math.floor((n - 2) / 2), 2.0);
+  if (n >= 3 && has('knight')) add('knight', Math.floor(n * 0.6), 1.3);
+  if (n >= 2 && has('bat')) add('bat', n + 1, 0.45);
   // Shuffle the regular monsters, bosses always come last.
-  const rnd = mulberry32(n * 977);
+  const rnd = mulberry32(n * 977 + lvl.gold);
   for (let i = groups.length - 1; i > 0; i--) {
     const j = Math.floor(rnd() * (i + 1));
     [groups[i], groups[j]] = [groups[j], groups[i]];
   }
-  if (n % 5 === 0) for (let i = 0; i < n / 5; i++) groups.push({ type: 'ogre', gap: 3 });
+  const bosses = n === WAVES ? lvl.finalBosses : (n === 5 && lvl.midBoss ? 1 : 0);
+  for (let i = 0; i < bosses; i++) groups.push({ type: 'ogre', gap: 3 });
   return groups;
 }
 
@@ -284,74 +397,109 @@ function mulberry32(a) {
 const inGrid = (c, r) => c >= 0 && r >= 0 && c < COLS && r < ROWS;
 const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
 function circle(g, x, y, r) { g.beginPath(); g.arc(x, y, r, 0, Math.PI * 2); g.fill(); }
+const starsHtml = n => '★'.repeat(n) + `<span class="off">${'★'.repeat(3 - n)}</span>`;
 
 // ---------------------------------------------------------------------------
-// Map: 0 forest, 1 clearing (buildable), 2 path, 3 castle
+// Save data (stars per map, perk ranks)
 // ---------------------------------------------------------------------------
-const grid = [...Array(ROWS)].map(() => Array(COLS).fill(0));
-for (let i = 0; i < WAYPOINTS.length - 1; i++) {
-  const [c0, r0] = WAYPOINTS[i], [c1, r1] = WAYPOINTS[i + 1];
-  const dc = Math.sign(c1 - c0), dr = Math.sign(r1 - r0);
-  let c = c0, r = r0;
-  while (true) {
-    if (inGrid(c, r)) grid[r][c] = 2;
-    if (c === c1 && r === r1) break;
-    c += dc; r += dr;
-  }
+function defaultPerks() { return Object.fromEntries(PERKS.map(p => [p.id, 0])); }
+function loadSave() {
+  try {
+    const s = JSON.parse(localStorage.getItem(SAVE_KEY));
+    if (s && Array.isArray(s.stars)) {
+      return { stars: LEVELS.map((_, i) => s.stars[i] || 0), perks: Object.assign(defaultPerks(), s.perks || {}) };
+    }
+  } catch (e) { /* storage unavailable */ }
+  return { stars: LEVELS.map(() => 0), perks: defaultPerks() };
 }
-for (let r = 5; r <= 9; r++) for (let c = 21; c < COLS; c++) grid[r][c] = 3;
-for (let r = 0; r < ROWS; r++) for (let c = 2; c < COLS; c++) {
-  if (grid[r][c] !== 0) continue;
-  let near = false;
-  for (let dr = -2; dr <= 2 && !near; dr++) for (let dc = -2; dc <= 2; dc++) {
-    if (inGrid(c + dc, r + dr) && grid[r + dr][c + dc] === 2) { near = true; break; }
+function writeSave() {
+  try { localStorage.setItem(SAVE_KEY, JSON.stringify(SAVE)); } catch (e) { /* storage unavailable */ }
+}
+const SAVE = loadSave();
+const starsEarned = () => SAVE.stars.reduce((a, b) => a + b, 0);
+const starsSpent = () => Object.values(SAVE.perks).reduce((a, b) => a + b, 0);
+const starsAvailable = () => starsEarned() - starsSpent();
+const perk = id => SAVE.perks[id] || 0;
+const unlocked = i => i === 0 || SAVE.stars[i - 1] > 0;
+
+// ---------------------------------------------------------------------------
+// Maps: grid values 0 forest, 1 clearing (buildable), 2 path, 3 castle
+// ---------------------------------------------------------------------------
+function buildMap(lvl, index) {
+  const grid = [...Array(ROWS)].map(() => Array(COLS).fill(0));
+  const wp = lvl.path;
+  for (let i = 0; i < wp.length - 1; i++) {
+    const [c0, r0] = wp[i], [c1, r1] = wp[i + 1];
+    const dc = Math.sign(c1 - c0), dr = Math.sign(r1 - r0);
+    let c = c0, r = r0;
+    while (true) {
+      if (inGrid(c, r)) grid[r][c] = 2;
+      if (c === c1 && r === r1) break;
+      c += dc; r += dr;
+    }
   }
-  if (near) grid[r][c] = 1;
+  const gateCol = wp[wp.length - 1][0];
+  const gateX = gateCol * TILE + TILE / 2;
+  const castle = { x: gateX - 94, y: 32, w: 188, h: 108 };
+  for (let r = 0; r <= 3; r++) for (let c = gateCol - 2; c <= gateCol + 2; c++) if (inGrid(c, r)) grid[r][c] = 3;
+
+  const nearCastle = (c, r) =>
+    c * TILE + TILE > castle.x - 22 && c * TILE < castle.x + castle.w + 22 &&
+    r * TILE + TILE > castle.y - 22 && r * TILE < castle.y + castle.h + 22;
+  for (let r = 0; r < ROWS - 2; r++) for (let c = 0; c < COLS; c++) {
+    if (grid[r][c] !== 0 || nearCastle(c, r)) continue;
+    let near = false;
+    for (let dr = -2; dr <= 2 && !near; dr++) for (let dc = -2; dc <= 2; dc++) {
+      if (inGrid(c + dc, r + dr) && grid[r + dr][c + dc] === 2) { near = true; break; }
+    }
+    if (near) grid[r][c] = 1;
+  }
+
+  const pts = wp.map(([c, r]) => ({ x: c * TILE + TILE / 2, y: r * TILE + TILE / 2 }));
+  pts[pts.length - 1].y = castle.y + castle.h - 4; // stop at the gate
+  const segs = [];
+  let len = 0;
+  for (let i = 0; i < pts.length - 1; i++) {
+    const a = pts[i], b = pts[i + 1];
+    const l = Math.hypot(b.x - a.x, b.y - a.y);
+    segs.push({ a, b, len: l, start: len, ang: Math.atan2(b.y - a.y, b.x - a.x) });
+    len += l;
+  }
+  return { lvl, index, grid, pts, segs, len, castle };
 }
 
-const PATH_PX = WAYPOINTS.map(([c, r]) => ({ x: c * TILE + TILE / 2, y: r * TILE + TILE / 2 }));
-PATH_PX[PATH_PX.length - 1].x = CASTLE.x + 4; // stop at the gate
-const SEGS = [];
-let PATH_LEN = 0;
-for (let i = 0; i < PATH_PX.length - 1; i++) {
-  const a = PATH_PX[i], b = PATH_PX[i + 1];
-  const len = Math.hypot(b.x - a.x, b.y - a.y);
-  SEGS.push({ a, b, len, start: PATH_LEN, ang: Math.atan2(b.y - a.y, b.x - a.x) });
-  PATH_LEN += len;
-}
-function pointAt(d) {
-  for (const s of SEGS) {
+function pointAt(d, map = MAP) {
+  for (const s of map.segs) {
     if (d <= s.start + s.len) {
       const t = (d - s.start) / s.len;
       return { x: s.a.x + (s.b.x - s.a.x) * t, y: s.a.y + (s.b.y - s.a.y) * t, ang: s.ang };
     }
   }
-  const s = SEGS[SEGS.length - 1];
+  const s = map.segs[map.segs.length - 1];
   return { x: s.b.x, y: s.b.y, ang: s.ang };
 }
 
 // ---------------------------------------------------------------------------
-// Canvases
+// Background rendering
 // ---------------------------------------------------------------------------
 const cvs = document.getElementById('c');
 const ctx = cvs.getContext('2d');
-const makeLayer = () => { const l = document.createElement('canvas'); l.width = W; l.height = H; return l; };
-const bg = makeLayer(), decal = makeLayer(), fog = makeLayer();
+const makeLayer = (w = W, h = H) => { const l = document.createElement('canvas'); l.width = w; l.height = h; return l; };
+const decal = makeLayer(), fog = makeLayer();
 const dctx = decal.getContext('2d');
 
-function drawTree(g, t) {
+function drawTree(g, t, S) {
   const { x, y, s } = t;
-  g.fillStyle = 'rgba(0,0,0,0.28)';
+  g.fillStyle = S.snow ? 'rgba(60,80,100,0.25)' : 'rgba(0,0,0,0.28)';
   g.beginPath(); g.ellipse(x + s * 0.35, y + s * 0.4, s, s * 0.9, 0, 0, Math.PI * 2); g.fill();
-  if (t.kind > 0.72) {
-    // Pine: layered stars
-    const shades = ['#173d1a', '#1f5223', '#2b6a2c'];
-    for (let k = 0; k < 3; k++) {
-      const rr = s * (1 - k * 0.28);
-      g.fillStyle = shades[k];
+  if (t.kind < S.pineChance) {
+    const layers = S.snow ? [...S.pines, '#f4f8fb'] : S.pines;
+    for (let k = 0; k < layers.length; k++) {
+      const rr = s * (1 - k * (S.snow ? 0.22 : 0.28));
+      g.fillStyle = layers[k];
       g.beginPath();
       for (let i = 0; i < 16; i++) {
-        const a = (i / 16) * Math.PI * 2 + k * 0.3;
+        const a = (i / 16) * Math.PI * 2 + k * 0.3 + t.rot;
         const rad = i % 2 ? rr * 0.62 : rr;
         g.lineTo(x + Math.cos(a) * rad - k, y + Math.sin(a) * rad - k);
       }
@@ -359,7 +507,7 @@ function drawTree(g, t) {
     }
     return;
   }
-  const pal = t.kind < 0.36 ? ['#1f4a1c', '#2e6a27', '#45923a'] : ['#264f1d', '#3a7329', '#559a3c'];
+  const pal = S.trees[Math.floor(t.kind2 * S.trees.length)];
   g.fillStyle = pal[0];
   for (let i = 0; i < 6; i++) {
     const a = (i / 6) * Math.PI * 2 + t.rot;
@@ -367,31 +515,28 @@ function drawTree(g, t) {
   }
   g.fillStyle = pal[1]; circle(g, x - s * 0.12, y - s * 0.14, s * 0.72);
   g.fillStyle = pal[2]; circle(g, x - s * 0.3, y - s * 0.32, s * 0.36);
+  if (S.snow) { g.fillStyle = 'rgba(244,248,251,.85)'; circle(g, x - s * 0.3, y - s * 0.35, s * 0.42); }
 }
 
-function drawCastle(g) {
-  const { x, y, w, h } = CASTLE;
+function drawCastle(g, castle) {
+  const { x, y, w, h } = castle;
   g.fillStyle = 'rgba(0,0,0,.35)'; g.fillRect(x + 7, y + 9, w, h);
   g.fillStyle = '#8f8a80'; g.fillRect(x, y, w, h);
   g.fillStyle = '#6d665a'; g.fillRect(x + 11, y + 11, w - 22, h - 22);
-  // courtyard cobbles
   const R = mulberry32(55);
   for (let i = 0; i < 140; i++) {
     g.fillStyle = `rgba(${R() < .5 ? '40,36,30' : '140,130,115'},.35)`;
     g.fillRect(x + 12 + R() * (w - 26), y + 12 + R() * (h - 26), 3, 2);
   }
-  // crenellations
   g.fillStyle = '#625d54';
   for (let i = x + 3; i < x + w - 3; i += 8) { g.fillRect(i, y, 4, 4); g.fillRect(i, y + h - 4, 4, 4); }
   for (let j = y + 3; j < y + h - 3; j += 8) { g.fillRect(x, j, 4, 4); g.fillRect(x + w - 4, j, 4, 4); }
-  // keep
-  const kx = x + w / 2 + 6, ky = y + h / 2;
-  g.fillStyle = 'rgba(0,0,0,.35)'; g.fillRect(kx - 24 + 5, ky - 32 + 7, 48, 64);
-  g.fillStyle = '#a8a297'; g.fillRect(kx - 24, ky - 32, 48, 64);
-  g.strokeStyle = '#5f5a51'; g.lineWidth = 2; g.strokeRect(kx - 24, ky - 32, 48, 64);
-  g.fillStyle = '#4f5d75'; g.fillRect(kx - 17, ky - 25, 34, 50);
-  g.strokeStyle = '#3a4558'; g.beginPath(); g.moveTo(kx, ky - 25); g.lineTo(kx, ky + 25); g.stroke();
-  // corner towers
+  const kx = x + w / 2, ky = y + h / 2 - 6;
+  g.fillStyle = 'rgba(0,0,0,.35)'; g.fillRect(kx - 32 + 5, ky - 24 + 7, 64, 48);
+  g.fillStyle = '#a8a297'; g.fillRect(kx - 32, ky - 24, 64, 48);
+  g.strokeStyle = '#5f5a51'; g.lineWidth = 2; g.strokeRect(kx - 32, ky - 24, 64, 48);
+  g.fillStyle = '#4f5d75'; g.fillRect(kx - 25, ky - 17, 50, 34);
+  g.strokeStyle = '#3a4558'; g.beginPath(); g.moveTo(kx - 25, ky); g.lineTo(kx + 25, ky); g.stroke();
   for (const [cx, cy] of [[x, y], [x + w, y], [x, y + h], [x + w, y + h]]) {
     g.fillStyle = 'rgba(0,0,0,.35)'; circle(g, cx + 5, cy + 7, 19);
     g.fillStyle = '#a29c90'; circle(g, cx, cy, 19);
@@ -400,89 +545,122 @@ function drawCastle(g) {
     grad.addColorStop(0, '#7c8aa6'); grad.addColorStop(1, '#3b465c');
     g.fillStyle = grad; circle(g, cx, cy, 12);
   }
-  // gate
-  g.fillStyle = '#4e321a'; g.fillRect(x - 5, ky - 15, 16, 30);
+  g.fillStyle = '#4e321a'; g.fillRect(kx - 15, y + h - 11, 30, 16);
   g.strokeStyle = '#2a1b0e'; g.lineWidth = 1.5;
-  for (let j = ky - 11; j < ky + 15; j += 6) { g.beginPath(); g.moveTo(x - 5, j); g.lineTo(x + 11, j); g.stroke(); }
+  for (let i = kx - 11; i < kx + 15; i += 6) { g.beginPath(); g.moveTo(i, y + h - 11); g.lineTo(i, y + h + 5); g.stroke(); }
 }
 
-function drawBackground() {
-  const g = bg.getContext('2d');
-  const R = mulberry32(1234);
-  g.fillStyle = '#2b5523'; g.fillRect(0, 0, W, H);
+function renderMap(map) {
+  const out = makeLayer(), g = out.getContext('2d');
+  const S = SEASONS[map.lvl.season], grid = map.grid;
+  const R = mulberry32(1234 + map.index * 97);
+  const tileAt = (x, y) => { const c = Math.floor(x / TILE), r = Math.floor(y / TILE); return inGrid(c, r) ? grid[r][c] : -1; };
+
+  g.fillStyle = S.floor; g.fillRect(0, 0, W, H);
   for (let i = 0; i < 1600; i++) {
-    g.fillStyle = `rgba(${R() < .5 ? '18,38,14' : '62,104,46'},${0.15 + R() * 0.2})`;
+    g.fillStyle = `rgba(${S.floorDots[R() < .5 ? 0 : 1]},${0.15 + R() * 0.2})`;
     circle(g, R() * W, R() * H, 1 + R() * 3);
   }
-  // clearing, drawn as soft blobs for an organic edge
-  g.fillStyle = '#5a9443';
-  for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) {
-    if (grid[r][c] === 1 || grid[r][c] === 2 || grid[r][c] === 3) {
-      circle(g, c * TILE + TILE / 2 + (R() - .5) * 8, r * TILE + TILE / 2 + (R() - .5) * 8, 30 + R() * 6);
+  if (S.water) {
+    for (let i = 0; i < 26; i++) {
+      const x = R() * W, y = R() * H;
+      if (tileAt(x, y) !== 0) continue;
+      const rx = 18 + R() * 26, ry = 10 + R() * 16, rot = R() * Math.PI;
+      g.fillStyle = '#3a4f3a'; g.beginPath(); g.ellipse(x, y, rx + 3, ry + 3, rot, 0, Math.PI * 2); g.fill();
+      g.fillStyle = '#23403e'; g.beginPath(); g.ellipse(x, y, rx, ry, rot, 0, Math.PI * 2); g.fill();
+      g.fillStyle = 'rgba(160,200,190,.15)'; g.beginPath(); g.ellipse(x - rx * .3, y - ry * .3, rx * .4, ry * .25, rot, 0, Math.PI * 2); g.fill();
+      for (let k = 0; k < 3; k++) { g.fillStyle = '#5f8a3c'; circle(g, x + (R() - .5) * rx, y + (R() - .5) * ry, 2.5); }
     }
   }
-  // grass blades
-  for (let i = 0; i < 4000; i++) {
-    const x = R() * W, y = R() * H;
-    const c = Math.floor(x / TILE), r = Math.floor(y / TILE);
-    if (!inGrid(c, r) || grid[r][c] === 0) continue;
-    g.strokeStyle = R() < .5 ? 'rgba(120,180,80,.5)' : 'rgba(50,95,35,.5)';
-    g.lineWidth = 1;
-    g.beginPath(); g.moveTo(x, y); g.lineTo(x + (R() - .5) * 3, y - 3 - R() * 3); g.stroke();
+  g.fillStyle = S.clearing;
+  for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) {
+    if (grid[r][c] !== 0) circle(g, c * TILE + TILE / 2 + (R() - .5) * 8, r * TILE + TILE / 2 + (R() - .5) * 8, 30 + R() * 6);
   }
-  // flowers and stones in the clearing
+  if (S.blades) {
+    for (let i = 0; i < 4000; i++) {
+      const x = R() * W, y = R() * H;
+      if (tileAt(x, y) <= 0) continue;
+      g.strokeStyle = S.blades[R() < .5 ? 0 : 1]; g.lineWidth = 1;
+      g.beginPath(); g.moveTo(x, y); g.lineTo(x + (R() - .5) * 3, y - 3 - R() * 3); g.stroke();
+    }
+  }
+  if (S.snow) {
+    for (let i = 0; i < 1500; i++) {
+      g.fillStyle = R() < .6 ? 'rgba(255,255,255,.8)' : 'rgba(170,190,210,.35)';
+      circle(g, R() * W, R() * H, 0.8 + R() * 1.6);
+    }
+  }
   for (let i = 0; i < 160; i++) {
     const x = R() * W, y = R() * H;
-    const c = Math.floor(x / TILE), r = Math.floor(y / TILE);
-    if (!inGrid(c, r) || grid[r][c] !== 1) continue;
+    if (tileAt(x, y) !== 1) continue;
     if (R() < .7) {
-      g.fillStyle = ['#f4e27a', '#ffffff', '#e98bc0', '#9fc4ff'][Math.floor(R() * 4)];
+      g.fillStyle = S.flowers[Math.floor(R() * S.flowers.length)];
       circle(g, x, y, 1.6);
     } else {
       g.fillStyle = 'rgba(0,0,0,.25)'; circle(g, x + 1.5, y + 1.5, 3);
       g.fillStyle = '#9a9a8e'; circle(g, x, y, 3);
     }
   }
-  // dirt path
   g.lineJoin = 'round'; g.lineCap = 'round';
   const trace = () => {
-    g.beginPath(); g.moveTo(-80, PATH_PX[0].y);
-    PATH_PX.forEach(p => g.lineTo(p.x, p.y));
-    g.lineTo(CASTLE.x + 20, PATH_PX[PATH_PX.length - 1].y);
+    g.beginPath(); g.moveTo(map.pts[0].x, H + 80);
+    map.pts.forEach(p => g.lineTo(p.x, p.y));
+    g.lineTo(map.pts[map.pts.length - 1].x, map.castle.y + map.castle.h - 20);
   };
-  trace(); g.strokeStyle = '#6a4f30'; g.lineWidth = 40; g.stroke();
-  trace(); g.strokeStyle = '#a5814f'; g.lineWidth = 32; g.stroke();
-  trace(); g.strokeStyle = 'rgba(255,230,180,.12)'; g.lineWidth = 12; g.stroke();
+  trace(); g.strokeStyle = S.pathEdge; g.lineWidth = 40; g.stroke();
+  trace(); g.strokeStyle = S.path; g.lineWidth = 32; g.stroke();
+  trace(); g.strokeStyle = S.pathLight; g.lineWidth = 12; g.stroke();
   for (let i = 0; i < 420; i++) {
-    const p = pointAt(R() * PATH_LEN);
+    const p = pointAt(R() * map.len, map);
     const off = (R() - .5) * 28;
-    g.fillStyle = R() < .5 ? 'rgba(90,65,38,.6)' : 'rgba(200,175,130,.5)';
+    g.fillStyle = R() < .5 ? 'rgba(70,50,30,.5)' : 'rgba(200,175,130,.45)';
     circle(g, p.x - Math.sin(p.ang) * off, p.y + Math.cos(p.ang) * off, 0.8 + R() * 1.6);
   }
-  // forest
+  if (S.leaves) {
+    const cols = ['#d9642c', '#e8b84a', '#a8401e', '#c98a2a'];
+    for (let i = 0; i < 700; i++) {
+      g.fillStyle = cols[Math.floor(R() * cols.length)];
+      g.beginPath(); g.ellipse(R() * W, R() * H, 2.2, 1.2, R() * Math.PI, 0, Math.PI * 2); g.fill();
+    }
+  }
   const trees = [];
   for (let r = -1; r <= ROWS; r++) for (let c = -1; c <= COLS; c++) {
     if (inGrid(c, r) && grid[r][c] !== 0) continue;
     const n = 1 + (R() < .65 ? 1 : 0);
     for (let k = 0; k < n; k++) {
-      trees.push({ x: c * TILE + R() * TILE, y: r * TILE + R() * TILE, s: 13 + R() * 10, kind: R(), rot: R() * 6 });
+      const x = c * TILE + R() * TILE, y = r * TILE + R() * TILE;
+      if (S.water && R() < .25) continue; // sparser swamp forest
+      trees.push({ x, y, s: 13 + R() * 10, kind: R(), kind2: R(), rot: R() * 6 });
     }
   }
-  trees.sort((a, b) => a.y - b.y).forEach(t => drawTree(g, t));
-  drawCastle(g);
+  trees.sort((a, b) => a.y - b.y).forEach(t => drawTree(g, t, S));
+  drawCastle(g, map.castle);
+  return out;
+}
 
-  // the void the monsters come from
+function renderFog() {
   const f = fog.getContext('2d');
-  const grad = f.createLinearGradient(0, 0, 150, 0);
+  const grad = f.createLinearGradient(0, H, 0, H - 150);
   grad.addColorStop(0, 'rgba(8,4,16,1)');
   grad.addColorStop(0.45, 'rgba(14,8,26,.75)');
   grad.addColorStop(1, 'rgba(14,8,26,0)');
-  f.fillStyle = grad; f.fillRect(0, 0, 150, H);
+  f.fillStyle = grad; f.fillRect(0, H - 150, W, 150);
 }
+
+const MAPS = LEVELS.map(buildMap);
+renderFog();
+const BGS = MAPS.map(renderMap);
+const THUMBS = BGS.map(bgc => {
+  const t = makeLayer(240, 360), g = t.getContext('2d');
+  g.drawImage(bgc, 0, 0, 240, 360); g.drawImage(fog, 0, 0, 240, 360);
+  return t.toDataURL('image/jpeg', 0.85);
+});
 
 // ---------------------------------------------------------------------------
 // Game state
 // ---------------------------------------------------------------------------
+let LEVEL = LEVELS[0], MAP = MAPS[0], BG = BGS[0];
+let mode = 'campaign'; // 'campaign' | 'play' | 'result'
 let G = null;
 let placing = null;   // tower type being placed
 let selected = null;  // selected tower object
@@ -490,11 +668,12 @@ let mouse = null;     // {x, y} in canvas space
 let nextTowerId = 1;
 
 function newGame() {
+  const maxHp = BASE_CASTLE_HP + 3 * perk('walls');
   G = {
-    gold: START_GOLD, hp: CASTLE_HP, wave: 0, waveActive: false,
+    gold: LEVEL.gold + 30 * perk('treasury'), hp: maxHp, maxHp, wave: 0, waveActive: false, pendingBonus: 0,
     spawnQ: [], spawnT: 0,
     monsters: [], towers: [], projs: [], parts: [], texts: [],
-    speed: 1, paused: false, over: false, started: false,
+    speed: 1, paused: false, over: false,
     shake: 0, castleFlash: 0, time: 0, banner: null,
   };
   placing = null; selected = null;
@@ -503,21 +682,24 @@ function newGame() {
 }
 
 function towerAt(c, r) { return G.towers.find(t => t.c === c && t.r === r); }
-function canBuild(c, r) { return inGrid(c, r) && grid[r][c] === 1 && !towerAt(c, r); }
+function canBuild(c, r) { return inGrid(c, r) && MAP.grid[r][c] === 1 && !towerAt(c, r); }
 
 function stats(t) {
-  const b = TOWERS[t.type], L = t.level - 1;
+  const b = TOWERS[t.type], L = t.level - 1, p = perk(b.perk);
+  const perkMul = t.type === 'mage' ? 1 + 0.15 * p : 1 + 0.12 * p;
   return {
-    damage: Math.round(b.damage * (1 + 0.6 * L)),
+    damage: Math.round(b.damage * (1 + 0.6 * L) * perkMul),
     range: b.range * (1 + 0.1 * L),
     rate: b.rate * (1 - 0.12 * L),
     splash: b.splash ? b.splash * (1 + 0.1 * L) : 0,
     slow: b.slow || 0,
-    slowDur: b.slowDur ? b.slowDur + 0.4 * L : 0,
+    slowDur: b.slowDur ? (b.slowDur + 0.4 * L) * perkMul : 0,
   };
 }
 const upgradeCost = t => Math.round(TOWERS[t.type].cost * 0.75 * t.level);
 const sellValue = t => Math.floor(t.spent * 0.7);
+const earlyBonus = () => Math.round(G.pendingBonus * 0.5);
+const canCallEarly = () => G.waveActive && !G.spawnQ.length && G.wave < WAVES && !G.over;
 
 function placeTower(type, c, r) {
   const cost = TOWERS[type].cost;
@@ -552,12 +734,23 @@ function sellTower(t) {
 }
 
 function startWave() {
-  if (G.waveActive || G.over || !G.started || G.wave >= MAX_WAVES) return;
+  if (mode !== 'play' || G.over || G.wave >= WAVES) return;
+  let early = 0;
+  if (G.waveActive) {
+    if (!canCallEarly()) return;
+    early = earlyBonus();
+    G.gold += G.pendingBonus + early;
+  }
   G.wave++;
   G.spawnQ = buildWave(G.wave);
   G.spawnT = 0.6;
   G.waveActive = true;
-  G.banner = { text: G.wave % 5 === 0 ? `Wave ${G.wave} — a Warlord approaches!` : `Wave ${G.wave}`, t: 2.4 };
+  G.pendingBonus = 20 + 5 * G.wave;
+  const boss = G.spawnQ.some(s => MONSTERS[s.type].boss);
+  let text = G.wave === WAVES ? `Final wave!` : `Wave ${G.wave}`;
+  if (boss) text += ' — a Warlord approaches!';
+  if (early) text = `Called early! +${early} bonus gold`;
+  G.banner = { text, t: 2.4 };
 }
 
 function spawn(type) {
@@ -569,21 +762,31 @@ function spawn(type) {
     reward: Math.round(d.reward * (1 + 0.05 * (G.wave - 1))),
     dist: 0, off: d.boss ? 0 : (Math.random() - .5) * 14,
     x: p.x, y: p.y, ang: 0, slowT: 0, slowF: 1, flash: 0,
-    walk: Math.random() * 6, dead: false,
+    walk: Math.random() * 6, dead: false, fly: !!d.fly,
   });
 }
 
 function damage(m, amt, tower) {
   if (m.dead) return;
-  m.hp -= amt; m.flash = 0.08;
+  const armor = MONSTERS[m.type].armor || 0;
+  let dealt = amt;
+  if (armor) {
+    dealt = Math.max(amt * 0.2, amt - armor);
+    if (dealt < amt * 0.6) {
+      for (let i = 0; i < 3; i++) G.parts.push({ x: m.x, y: m.y, vx: (Math.random() - .5) * 120, vy: (Math.random() - .5) * 120, life: 0.2, max: 0.2, color: '#fff6c0', size: 1.4 });
+    }
+  }
+  m.hp -= dealt; m.flash = 0.08;
   if (m.hp <= 0) {
     m.dead = true;
     G.gold += m.reward;
     if (tower) tower.kills++;
     floatText(m.x, m.y - 12, '+' + m.reward, '#e8b84a');
     puff(m.x, m.y, MONSTERS[m.type].color, 14);
-    dctx.fillStyle = 'rgba(60,20,15,.22)';
-    circle(dctx, m.x + (Math.random() - .5) * 4, m.y + (Math.random() - .5) * 4, MONSTERS[m.type].r * 0.8);
+    if (!m.fly) {
+      dctx.fillStyle = 'rgba(60,20,15,.22)';
+      circle(dctx, m.x + (Math.random() - .5) * 4, m.y + (Math.random() - .5) * 4, MONSTERS[m.type].r * 0.8);
+    }
   }
 }
 
@@ -594,20 +797,21 @@ function castleHit(m) {
   puff(m.x, m.y, '#d9543f', 10);
   if (G.hp <= 0) {
     G.hp = 0; G.over = true;
-    showOverlay('The castle has fallen',
-      `The monsters broke through on wave ${G.wave}. The King will need a new Hand…`, 'Try again');
+    const g = G;
+    setTimeout(() => { if (G === g) showDefeat(); }, 900);
   }
 }
 
 function waveDone() {
   G.waveActive = false;
-  const bonus = 20 + 5 * G.wave;
-  G.gold += bonus;
-  G.banner = { text: `Wave cleared  +${bonus} gold`, t: 2 };
-  if (G.wave >= MAX_WAVES) {
+  G.gold += G.pendingBonus;
+  G.banner = { text: `Wave cleared  +${G.pendingBonus} gold`, t: 2 };
+  G.pendingBonus = 0;
+  if (G.wave >= WAVES) {
     G.over = true;
-    showOverlay('The realm is safe!',
-      `You held the forest pass through all ${MAX_WAVES} waves with ${G.hp} castle health left. The King is pleased.`, 'Play again');
+    G.banner = { text: 'Victory!', t: 3 };
+    const g = G;
+    setTimeout(() => { if (G === g) showVictory(); }, 1200);
   }
 }
 
@@ -625,10 +829,10 @@ function floatText(x, y, text, color) { G.texts.push({ x, y, text, color, life: 
 // ---------------------------------------------------------------------------
 // Update
 // ---------------------------------------------------------------------------
-function findTarget(t, range) {
+function findTarget(t, range, air) {
   let best = null;
   for (const m of G.monsters) {
-    if (m.dead) continue;
+    if (m.dead || (m.fly && !air)) continue;
     if (dist(t, m) <= range && (!best || m.dist > best.dist)) best = m;
   }
   return best;
@@ -639,7 +843,7 @@ function fire(t, m, s) {
   if (kind === 'rock') {
     const flight = Math.min(1.0, Math.max(0.55, dist(t, m) / 240));
     const ahead = m.dist + m.speed * (m.slowT > 0 ? m.slowF : 1) * flight;
-    const p = pointAt(Math.min(ahead, PATH_LEN));
+    const p = pointAt(Math.min(ahead, MAP.len));
     G.projs.push({ kind, sx: t.x, sy: t.y, tx: p.x, ty: p.y, x: t.x, y: t.y, h: 0, t: 0, dur: flight, dmg: s.damage, splash: s.splash, tower: t });
   } else {
     G.projs.push({
@@ -674,7 +878,7 @@ function update(dt) {
     const step = m.speed * sf * dt;
     m.dist += step;
     m.walk += step * 0.25;
-    if (m.dist >= PATH_LEN) { castleHit(m); continue; }
+    if (m.dist >= MAP.len) { castleHit(m); continue; }
     const p = pointAt(m.dist);
     m.x = p.x - Math.sin(p.ang) * m.off;
     m.y = p.y + Math.cos(p.ang) * m.off;
@@ -685,7 +889,7 @@ function update(dt) {
     const s = stats(t);
     t.cd -= dt;
     t.anim = Math.max(0, t.anim - dt * 2.5);
-    const target = findTarget(t, s.range);
+    const target = findTarget(t, s.range, TOWERS[t.type].air);
     if (target) {
       const want = Math.atan2(target.y - t.y, target.x - t.x);
       let d = want - t.ang;
@@ -706,8 +910,9 @@ function update(dt) {
       if (k >= 1) {
         p.done = true;
         for (const m of G.monsters) {
+          if (m.dead || m.fly) continue;
           const d = dist(p, m);
-          if (!m.dead && d <= p.splash) damage(m, p.dmg * (1 - 0.5 * d / p.splash), p.tower);
+          if (d <= p.splash) damage(m, p.dmg * (1 - 0.5 * d / p.splash), p.tower);
         }
         puff(p.x, p.y, '#a58a63', 16);
         dctx.fillStyle = 'rgba(60,40,20,.18)'; circle(dctx, p.x, p.y, 9);
@@ -810,61 +1015,95 @@ function drawTower(g, type, x, y, ang, level, anim, time) {
   g.restore();
 }
 
+function drawBat(m, d, body) {
+  const r = d.r;
+  ctx.fillStyle = 'rgba(0,0,0,.25)';
+  ctx.beginPath(); ctx.ellipse(m.x + 8, m.y + 12, r * 0.9, r * 0.5, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.save(); ctx.translate(m.x, m.y - 6); ctx.rotate(m.ang);
+  const span = r * (1.4 + 0.6 * Math.sin(m.walk * 1.6));
+  ctx.fillStyle = m.flash > 0 ? '#ffffff' : '#35283f';
+  for (const sgn of [-1, 1]) {
+    ctx.beginPath();
+    ctx.moveTo(r * 0.3, 0);
+    ctx.quadraticCurveTo(r * 0.2, sgn * span * 1.1, -r * 0.8, sgn * span);
+    ctx.lineTo(-r * 0.3, sgn * span * 0.45);
+    ctx.lineTo(-r * 0.5, 0);
+    ctx.closePath(); ctx.fill();
+  }
+  ctx.fillStyle = body; circle(ctx, 0, 0, r * 0.6);
+  ctx.fillStyle = '#ff4a3a';
+  circle(ctx, r * 0.35, -r * 0.2, 1.5); circle(ctx, r * 0.35, r * 0.2, 1.5);
+  if (m.slowT > 0) { ctx.fillStyle = 'rgba(140,200,255,.4)'; circle(ctx, 0, 0, r * 0.9); }
+  ctx.restore();
+}
+
 function drawMonster(m) {
   const d = MONSTERS[m.type], r = d.r;
-  ctx.save(); ctx.translate(m.x, m.y);
-  ctx.fillStyle = 'rgba(0,0,0,.3)';
-  ctx.beginPath(); ctx.ellipse(3, 4, r * 1.05, r * 0.85, 0, 0, Math.PI * 2); ctx.fill();
-  ctx.rotate(m.ang);
-  const sw = Math.sin(m.walk);
-  // feet
-  ctx.fillStyle = 'rgba(30,25,20,.85)';
-  circle(ctx, sw * r * 0.45, -r * 0.55, r * 0.3);
-  circle(ctx, -sw * r * 0.45, r * 0.55, r * 0.3);
   const body = m.flash > 0 ? '#ffffff' : d.color;
-  if (m.type === 'wolf') {
-    ctx.strokeStyle = body; ctx.lineWidth = 3; ctx.lineCap = 'round';
-    ctx.beginPath(); ctx.moveTo(-r * 1.2, 0); ctx.lineTo(-r * 1.9, sw * 3); ctx.stroke();
-    ctx.fillStyle = body; ctx.beginPath(); ctx.ellipse(0, 0, r * 1.35, r * 0.75, 0, 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = '#6f6f75'; ctx.beginPath(); ctx.ellipse(r * 1.1, 0, r * 0.55, r * 0.45, 0, 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = '#ffd24a'; circle(ctx, r * 1.3, -r * 0.22, 1.6); circle(ctx, r * 1.3, r * 0.22, 1.6);
+  if (m.fly) {
+    drawBat(m, d, body);
   } else {
-    if (m.type === 'goblin') {
-      ctx.fillStyle = body;
-      ctx.beginPath(); ctx.moveTo(-2, -r * 0.7); ctx.lineTo(-r * 0.9, -r * 1.5); ctx.lineTo(r * 0.3, -r * 0.8); ctx.fill();
-      ctx.beginPath(); ctx.moveTo(-2, r * 0.7); ctx.lineTo(-r * 0.9, r * 1.5); ctx.lineTo(r * 0.3, r * 0.8); ctx.fill();
-    }
-    if (m.type === 'troll' || m.type === 'ogre') {
-      ctx.strokeStyle = '#5b3b1c'; ctx.lineWidth = m.type === 'ogre' ? 6 : 5; ctx.lineCap = 'round';
-      ctx.beginPath(); ctx.moveTo(0, r * 0.9); ctx.lineTo(r * 0.9 + sw * 3, r * 1.4); ctx.stroke();
-    }
-    ctx.fillStyle = body; circle(ctx, 0, 0, r);
-    ctx.fillStyle = 'rgba(255,255,255,.15)'; circle(ctx, -r * 0.25, -r * 0.3, r * 0.5);
-    if (m.type === 'orc' || m.type === 'ogre') {
-      ctx.fillStyle = '#f2ead8';
-      ctx.beginPath(); ctx.moveTo(r * 0.8, -r * 0.35); ctx.lineTo(r * 1.25, -r * 0.45); ctx.lineTo(r * 0.85, -r * 0.15); ctx.fill();
-      ctx.beginPath(); ctx.moveTo(r * 0.8, r * 0.35); ctx.lineTo(r * 1.25, r * 0.45); ctx.lineTo(r * 0.85, r * 0.15); ctx.fill();
-    }
-    if (m.type === 'ogre') {
-      ctx.fillStyle = '#e8b84a';
-      ctx.beginPath();
-      for (let i = 0; i < 10; i++) {
-        const a = (i / 10) * Math.PI * 2, rr = i % 2 ? r * 0.3 : r * 0.5;
-        ctx.lineTo(-r * 0.15 + Math.cos(a) * rr, Math.sin(a) * rr);
+    ctx.save(); ctx.translate(m.x, m.y);
+    ctx.fillStyle = 'rgba(0,0,0,.3)';
+    ctx.beginPath(); ctx.ellipse(3, 4, r * 1.05, r * 0.85, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.rotate(m.ang);
+    const sw = Math.sin(m.walk);
+    ctx.fillStyle = 'rgba(30,25,20,.85)';
+    circle(ctx, sw * r * 0.45, -r * 0.55, r * 0.3);
+    circle(ctx, -sw * r * 0.45, r * 0.55, r * 0.3);
+    if (m.type === 'wolf') {
+      ctx.strokeStyle = body; ctx.lineWidth = 3; ctx.lineCap = 'round';
+      ctx.beginPath(); ctx.moveTo(-r * 1.2, 0); ctx.lineTo(-r * 1.9, sw * 3); ctx.stroke();
+      ctx.fillStyle = body; ctx.beginPath(); ctx.ellipse(0, 0, r * 1.35, r * 0.75, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#6f6f75'; ctx.beginPath(); ctx.ellipse(r * 1.1, 0, r * 0.55, r * 0.45, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#ffd24a'; circle(ctx, r * 1.3, -r * 0.22, 1.6); circle(ctx, r * 1.3, r * 0.22, 1.6);
+    } else if (m.type === 'knight') {
+      ctx.fillStyle = '#b8282a';
+      ctx.beginPath(); ctx.ellipse(-r * 0.75, 0, r * 0.55, r * 0.22, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = '#d8dce0'; ctx.lineWidth = 2.5; ctx.lineCap = 'round';
+      ctx.beginPath(); ctx.moveTo(r * 0.2, r * 0.9); ctx.lineTo(r * 1.5, r * 0.9 + sw * 2); ctx.stroke();
+      ctx.fillStyle = body; circle(ctx, 0, 0, r);
+      ctx.fillStyle = 'rgba(255,255,255,.35)'; circle(ctx, -r * 0.25, -r * 0.3, r * 0.45);
+      ctx.strokeStyle = '#3a3f45'; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.moveTo(r * 0.55, -r * 0.45); ctx.lineTo(r * 0.55, r * 0.45); ctx.stroke();
+      ctx.fillStyle = '#2f4f8f';
+      ctx.beginPath(); ctx.roundRect(-r * 0.45, -r * 1.25, r * 1.0, r * 0.5, 3); ctx.fill();
+      ctx.fillStyle = '#e8b84a'; ctx.fillRect(-r * 0.05, -r * 1.25, r * 0.18, r * 0.5);
+    } else {
+      if (m.type === 'goblin') {
+        ctx.fillStyle = body;
+        ctx.beginPath(); ctx.moveTo(-2, -r * 0.7); ctx.lineTo(-r * 0.9, -r * 1.5); ctx.lineTo(r * 0.3, -r * 0.8); ctx.fill();
+        ctx.beginPath(); ctx.moveTo(-2, r * 0.7); ctx.lineTo(-r * 0.9, r * 1.5); ctx.lineTo(r * 0.3, r * 0.8); ctx.fill();
       }
-      ctx.closePath(); ctx.fill();
+      if (m.type === 'troll' || m.type === 'ogre') {
+        ctx.strokeStyle = '#5b3b1c'; ctx.lineWidth = m.type === 'ogre' ? 6 : 5; ctx.lineCap = 'round';
+        ctx.beginPath(); ctx.moveTo(0, r * 0.9); ctx.lineTo(r * 0.9 + sw * 3, r * 1.4); ctx.stroke();
+      }
+      ctx.fillStyle = body; circle(ctx, 0, 0, r);
+      ctx.fillStyle = 'rgba(255,255,255,.15)'; circle(ctx, -r * 0.25, -r * 0.3, r * 0.5);
+      if (m.type === 'orc' || m.type === 'ogre') {
+        ctx.fillStyle = '#f2ead8';
+        ctx.beginPath(); ctx.moveTo(r * 0.8, -r * 0.35); ctx.lineTo(r * 1.25, -r * 0.45); ctx.lineTo(r * 0.85, -r * 0.15); ctx.fill();
+        ctx.beginPath(); ctx.moveTo(r * 0.8, r * 0.35); ctx.lineTo(r * 1.25, r * 0.45); ctx.lineTo(r * 0.85, r * 0.15); ctx.fill();
+      }
+      if (m.type === 'ogre') {
+        ctx.fillStyle = '#e8b84a';
+        ctx.beginPath();
+        for (let i = 0; i < 10; i++) {
+          const a = (i / 10) * Math.PI * 2, rr = i % 2 ? r * 0.3 : r * 0.5;
+          ctx.lineTo(-r * 0.15 + Math.cos(a) * rr, Math.sin(a) * rr);
+        }
+        ctx.closePath(); ctx.fill();
+      }
+      ctx.fillStyle = m.type === 'goblin' ? '#ffe14a' : '#ff4a3a';
+      circle(ctx, r * 0.55, -r * 0.32, Math.max(1.6, r * 0.13));
+      circle(ctx, r * 0.55, r * 0.32, Math.max(1.6, r * 0.13));
     }
-    ctx.fillStyle = m.type === 'goblin' ? '#ffe14a' : '#ff4a3a';
-    circle(ctx, r * 0.55, -r * 0.32, Math.max(1.6, r * 0.13));
-    circle(ctx, r * 0.55, r * 0.32, Math.max(1.6, r * 0.13));
+    if (m.slowT > 0) { ctx.fillStyle = 'rgba(140,200,255,.4)'; circle(ctx, 0, 0, r * 1.15); }
+    ctx.restore();
   }
-  if (m.slowT > 0) {
-    ctx.fillStyle = 'rgba(140,200,255,.4)'; circle(ctx, 0, 0, r * 1.15);
-  }
-  ctx.restore();
-  // health bar
   const bw = Math.max(18, r * 2.2), pct = Math.max(0, m.hp / m.maxHp);
-  const by = m.y - r - 9;
+  const by = m.y - r - 9 - (m.fly ? 6 : 0);
   ctx.fillStyle = 'rgba(0,0,0,.6)'; ctx.fillRect(m.x - bw / 2 - 1, by - 1, bw + 2, 5);
   ctx.fillStyle = pct > .5 ? '#6fd04a' : pct > .25 ? '#e8b84a' : '#e0503a';
   ctx.fillRect(m.x - bw / 2, by, bw * pct, 3);
@@ -900,7 +1139,7 @@ function drawRange(x, y, range, ok) {
 }
 
 function drawPortal() {
-  const p = PATH_PX[0], cx = 18, cy = p.y;
+  const cx = MAP.pts[0].x, cy = H - 18;
   for (let i = 0; i < 4; i++) {
     const a = G.time * (0.8 + i * 0.3) + i * 1.7;
     ctx.strokeStyle = `rgba(${150 + i * 20},${70 + i * 10},220,${0.35 - i * 0.06})`;
@@ -913,7 +1152,8 @@ function drawPortal() {
 }
 
 function drawFlag() {
-  const kx = CASTLE.x + CASTLE.w / 2 + 6, ky = CASTLE.y + CASTLE.h / 2;
+  const C = MAP.castle;
+  const kx = C.x + C.w / 2, ky = C.y + C.h / 2 - 12;
   ctx.fillStyle = '#3a2a1a'; circle(ctx, kx, ky, 2.5);
   ctx.fillStyle = '#b8282a';
   ctx.beginPath(); ctx.moveTo(kx, ky - 1);
@@ -930,9 +1170,10 @@ function drawFlag() {
 }
 
 function draw() {
+  const C = MAP.castle;
   ctx.save();
   if (G.shake > 0) ctx.translate((Math.random() - .5) * 20 * G.shake, (Math.random() - .5) * 20 * G.shake);
-  ctx.drawImage(bg, 0, 0);
+  ctx.drawImage(BG, 0, 0);
   ctx.drawImage(decal, 0, 0);
 
   if (placing) {
@@ -945,12 +1186,13 @@ function draw() {
   drawFlag();
   if (G.castleFlash > 0) {
     ctx.fillStyle = `rgba(255,40,20,${G.castleFlash})`;
-    ctx.fillRect(CASTLE.x - 18, CASTLE.y - 18, CASTLE.w + 36, CASTLE.h + 36);
+    ctx.fillRect(C.x - 18, C.y - 18, C.w + 36, C.h + 36);
   }
-  const pct = G.hp / CASTLE_HP;
-  ctx.fillStyle = 'rgba(0,0,0,.6)'; ctx.fillRect(CASTLE.x - 1, CASTLE.y - 34, CASTLE.w + 2, 8);
+  const pct = G.hp / G.maxHp;
+  const barY = C.y - 24;
+  ctx.fillStyle = 'rgba(0,0,0,.6)'; ctx.fillRect(C.x - 1, barY, C.w + 2, 8);
   ctx.fillStyle = pct > .5 ? '#6fd04a' : pct > .25 ? '#e8b84a' : '#e0503a';
-  ctx.fillRect(CASTLE.x, CASTLE.y - 33, CASTLE.w * pct, 6);
+  ctx.fillRect(C.x, barY + 1, C.w * pct, 6);
 
   for (const t of G.towers) drawTower(ctx, t.type, t.x, t.y, t.ang, t.level, t.anim, G.time);
   if (selected) {
@@ -959,7 +1201,7 @@ function draw() {
     ctx.strokeRect(selected.x - 19, selected.y - 19, 38, 38);
   }
 
-  [...G.monsters].sort((a, b) => a.y - b.y).forEach(drawMonster);
+  [...G.monsters].sort((a, b) => (a.fly - b.fly) || (a.y - b.y)).forEach(drawMonster);
   G.projs.forEach(drawProjectile);
   for (const p of G.parts) {
     ctx.globalAlpha = Math.max(0, p.life / p.max);
@@ -993,7 +1235,7 @@ function draw() {
   }
   ctx.globalAlpha = 1;
 
-  const bannerText = G.paused ? 'Paused' : G.banner && G.banner.text;
+  const bannerText = mode === 'play' && G.paused ? 'Paused' : G.banner && G.banner.text;
   if (bannerText) {
     const a = G.paused ? 1 : Math.min(1, G.banner.t * 1.5);
     ctx.globalAlpha = a;
@@ -1007,10 +1249,13 @@ function draw() {
 }
 
 // ---------------------------------------------------------------------------
-// UI
+// Side panel UI
 // ---------------------------------------------------------------------------
 const $ = id => document.getElementById(id);
-const els = { gold: $('gold'), hp: $('hp'), wave: $('wave'), info: $('info'), start: $('startBtn'), speed: $('speedBtn'), pause: $('pauseBtn'), next: $('nextWave') };
+const els = {
+  gold: $('gold'), hp: $('hp'), wave: $('wave'), info: $('info'), start: $('startBtn'),
+  speed: $('speedBtn'), pause: $('pauseBtn'), next: $('nextWave'), mapName: $('mapName'), retreat: $('retreatBtn'),
+};
 const setText = (el, v) => { v = String(v); if (el.textContent !== v) el.textContent = v; };
 const shopButtons = {};
 let infoKey = '';
@@ -1033,13 +1278,13 @@ function buildShop() {
 }
 
 function togglePlacing(key) {
-  if (G.over) return;
+  if (mode !== 'play' || G.over) return;
   if (G.gold < TOWERS[key].cost && placing !== key) return;
   placing = placing === key ? null : key;
   selected = null;
 }
 
-function fmtStats(s, type) {
+function fmtStats(s) {
   const rows = [['Damage', s.damage], ['Range', Math.round(s.range)], ['Shots / sec', (1 / s.rate).toFixed(1)]];
   if (s.splash) rows.push(['Splash radius', Math.round(s.splash)]);
   if (s.slow) rows.push(['Slow', `${Math.round(s.slow * 100)}% for ${s.slowDur.toFixed(1)}s`]);
@@ -1079,17 +1324,19 @@ function renderInfo() {
       <p>Click a light-grass tile next to the path. Shift+click to place several.</p>`;
   } else {
     els.info.innerHTML = `
-      <p>Choose a weapon from the armory and place it on the light grass along the pathway.</p>
-      <p>Weapons fire automatically at the monster furthest along the path. Earn gold for every kill and every wave cleared.</p>`;
+      <p>Choose a weapon from the armory and place it on the light grass along the road.</p>
+      <p>Weapons fire on their own at the monster furthest along the road. Keep the castle unharmed for <span style="color:var(--gold)">★★★</span>.</p>`;
   }
 }
 
 function syncUI() {
+  setText(els.mapName, `${MAP.index + 1}. ${LEVEL.name} · ${SEASONS[LEVEL.season].label}`);
   setText(els.gold, G.gold);
   setText(els.hp, G.hp);
-  setText(els.wave, `${G.wave}/${MAX_WAVES}`);
+  setText(els.wave, `${G.wave}/${WAVES}`);
+  const playing = mode === 'play' && !G.over;
   for (const [key, b] of Object.entries(shopButtons)) {
-    b.disabled = G.over || G.gold < TOWERS[key].cost;
+    b.disabled = !playing || G.gold < TOWERS[key].cost;
     b.classList.toggle('active', placing === key);
   }
   if (placing && G.gold < TOWERS[placing].cost) placing = null;
@@ -1098,36 +1345,155 @@ function syncUI() {
     const k = $('kills'); if (k) setText(k, selected.kills);
     const up = $('upBtn'); if (up) up.disabled = selected.level >= MAX_LEVEL || G.gold < upgradeCost(selected);
   }
-  els.start.disabled = G.waveActive || G.over || !G.started;
-  setText(els.start, G.waveActive ? `Wave ${G.wave} in progress…` : `Start Wave ${Math.min(G.wave + 1, MAX_WAVES)}`);
+
+  let label;
+  if (!G.waveActive) label = G.wave >= WAVES ? 'All waves done' : `Start Wave ${G.wave + 1}`;
+  else if (canCallEarly()) label = `Call Wave ${G.wave + 1} early (+${earlyBonus()}g)`;
+  else if (G.wave >= WAVES) label = 'Final wave!';
+  else label = `Wave ${G.wave} arriving…`;
+  setText(els.start, label);
+  els.start.disabled = !playing || (G.waveActive && !canCallEarly()) || (!G.waveActive && G.wave >= WAVES);
   setText(els.speed, G.speed + '×');
   setText(els.pause, G.paused ? '▶' : '❚❚');
-  if (!G.waveActive && G.wave < MAX_WAVES && !G.over) {
+  els.retreat.disabled = mode !== 'play';
+
+  if (!G.waveActive && G.wave < WAVES && !G.over) {
     const counts = {};
     buildWave(G.wave + 1).forEach(s => counts[s.type] = (counts[s.type] || 0) + 1);
-    const plural = (t, n) => n === 1 ? MONSTERS[t].name : t === 'wolf' ? 'Wolves' : MONSTERS[t].name + 's';
-    setText(els.next, 'Next: ' + Object.entries(counts).map(([t, n]) => `${n} ${plural(t, n)}`).join(', '));
+    setText(els.next, 'Next: ' + Object.entries(counts).map(([t, n]) => `${n} ${n === 1 ? MONSTERS[t].name : MONSTERS[t].plural}`).join(', '));
   } else {
     const left = G.spawnQ.length + G.monsters.length;
     setText(els.next, G.over ? '' : `Monsters remaining: ${left}`);
   }
 }
 
-function showOverlay(title, text, btn) {
-  $('ovTitle').textContent = title;
-  $('ovText').textContent = text;
-  $('ovBtn').textContent = btn;
-  $('overlay').hidden = false;
-}
-
-$('ovBtn').onclick = () => {
-  if (G.over) newGame();
-  G.started = true;
-  $('overlay').hidden = true;
-};
 els.start.onclick = startWave;
 els.speed.onclick = () => { G.speed = G.speed >= 3 ? 1 : G.speed + 1; };
-els.pause.onclick = () => { G.paused = !G.paused; };
+els.pause.onclick = () => { if (mode === 'play') G.paused = !G.paused; };
+let retreatArmed = 0;
+els.retreat.onclick = () => {
+  if (mode !== 'play') return;
+  if (performance.now() - retreatArmed < 3000) { retreatArmed = 0; els.retreat.textContent = 'Retreat to campaign map'; showCampaign(); return; }
+  retreatArmed = performance.now();
+  els.retreat.textContent = 'Click again to abandon this road';
+  setTimeout(() => { if (retreatArmed) els.retreat.textContent = 'Retreat to campaign map'; retreatArmed = 0; }, 3000);
+};
+
+// ---------------------------------------------------------------------------
+// Overlays: campaign map, briefing, results
+// ---------------------------------------------------------------------------
+const ov = $('overlay'), ovCard = $('ovCard');
+function showOverlay(html, wide) {
+  ovCard.className = 'card' + (wide ? ' wide' : '');
+  ovCard.innerHTML = html;
+  ov.hidden = false;
+}
+const ACTIONS = {
+  campaign: () => showCampaign(),
+  brief: i => showBriefing(+i),
+  play: i => startLevel(+i),
+  perk: id => {
+    if (starsAvailable() > 0 && perk(id) < PERK_MAX) { SAVE.perks[id]++; writeSave(); showCampaign(); }
+  },
+  resetPerks: () => { SAVE.perks = defaultPerks(); writeSave(); showCampaign(); },
+};
+ovCard.addEventListener('click', e => {
+  const b = e.target.closest('[data-act]');
+  if (b && !b.disabled) ACTIONS[b.dataset.act](b.dataset.arg);
+});
+
+function showCampaign() {
+  mode = 'campaign';
+  const avail = starsAvailable();
+  const cards = LEVELS.map((l, i) => {
+    const locked = !unlocked(i);
+    return `<button class="map-card" data-act="brief" data-arg="${i}" ${locked ? 'disabled' : ''}>
+      <img src="${THUMBS[i]}" alt="">
+      <div class="meta">
+        <strong>${i + 1}. ${l.name}</strong>
+        <small>${SEASONS[l.season].label}</small>
+        <div class="stars">${starsHtml(SAVE.stars[i])}</div>
+        ${locked ? '<small>Locked: win the previous road first</small>' : ''}
+      </div>
+    </button>`;
+  }).join('');
+  const perks = PERKS.map(p => {
+    const rank = perk(p.id);
+    return `<div class="perk">
+      <div><b>${p.name}</b><small>${p.desc}</small></div>
+      <span class="pips">${'●'.repeat(rank)}<span class="off">${'●'.repeat(PERK_MAX - rank)}</span></span>
+      <button data-act="perk" data-arg="${p.id}" ${avail > 0 && rank < PERK_MAX ? '' : 'disabled'} title="Spend 1 star">+★</button>
+    </div>`;
+  }).join('');
+  showOverlay(`
+    <h2>The King's Campaign</h2>
+    <p class="muted">Monsters are pouring out of the void. As Hand of the King you must hold each road to the castle for ${WAVES} waves.
+      Win a road to unlock the next. Earn up to 3 stars per road (3 if the castle takes no damage) and spend them on permanent perks.</p>
+    <div class="maps">${cards}</div>
+    <h3>Royal Perks <span>★ ${avail} to spend · ${starsEarned()}/${LEVELS.length * 3} earned</span></h3>
+    <div class="perks">${perks}</div>
+    <div class="btn-row" style="margin-top:12px"><button data-act="resetPerks" ${starsSpent() ? '' : 'disabled'}>Refund all perks</button></div>
+  `, true);
+}
+
+function showBriefing(i) {
+  const l = LEVELS[i];
+  showOverlay(`
+    <h2>${l.name}</h2>
+    <p class="muted">${SEASONS[l.season].label} · ${WAVES} waves · ${l.gold + 30 * perk('treasury')} starting gold</p>
+    <img class="brief-img" src="${THUMBS[i]}" alt="">
+    <p>${l.desc}</p>
+    <p class="foes">${l.newFoes}</p>
+    <p class="muted">Your best: <span class="stars">${starsHtml(SAVE.stars[i])}</span></p>
+    <div class="btn-row">
+      <button data-act="campaign">Back</button>
+      <button class="primary" data-act="play" data-arg="${i}">Defend this road</button>
+    </div>
+  `);
+}
+
+function startLevel(i) {
+  LEVEL = LEVELS[i]; MAP = MAPS[i]; BG = BGS[i];
+  newGame();
+  mode = 'play';
+  ov.hidden = true;
+  G.banner = { text: LEVEL.name, t: 2.4 };
+}
+
+function showVictory() {
+  mode = 'result';
+  const i = MAP.index;
+  const stars = G.hp >= G.maxHp ? 3 : G.hp > G.maxHp / 2 ? 2 : 1;
+  const prev = SAVE.stars[i];
+  const gain = Math.max(0, stars - prev);
+  if (gain) { SAVE.stars[i] = stars; writeSave(); }
+  const last = i === LEVELS.length - 1;
+  showOverlay(`
+    <h2>${last ? 'The realm is safe!' : 'Victory!'}</h2>
+    <p>${LEVEL.name} held with ${G.hp}/${G.maxHp} castle health.</p>
+    <div class="big-stars stars">${starsHtml(stars)}</div>
+    <p class="muted">${gain ? `New best! +${gain} star${gain > 1 ? 's' : ''} to spend on Royal Perks.` : `Your best here is ${prev} star${prev > 1 ? 's' : ''}.`}
+      ${last ? '<br>You have completed the campaign. Go back for three stars on every road!' : ''}</p>
+    <div class="btn-row">
+      <button data-act="campaign">Campaign map</button>
+      <button data-act="play" data-arg="${i}">Replay</button>
+      ${last ? '' : `<button class="primary" data-act="brief" data-arg="${i + 1}">Next road →</button>`}
+    </div>
+  `);
+}
+
+function showDefeat() {
+  mode = 'result';
+  showOverlay(`
+    <h2>The castle has fallen</h2>
+    <p>The monsters broke through ${LEVEL.name} on wave ${G.wave} of ${WAVES}.</p>
+    <p class="muted">Tip: build where the road bends. Weapons there cover two stretches of road at once.</p>
+    <div class="btn-row">
+      <button data-act="campaign">Campaign map</button>
+      <button class="primary" data-act="play" data-arg="${MAP.index}">Try again</button>
+    </div>
+  `);
+}
 
 // ---------------------------------------------------------------------------
 // Input
@@ -1139,7 +1505,7 @@ function toCanvas(e) {
 cvs.addEventListener('mousemove', e => { mouse = toCanvas(e); });
 cvs.addEventListener('mouseleave', () => { mouse = null; });
 cvs.addEventListener('click', e => {
-  if (!G.started || G.over) return;
+  if (mode !== 'play' || G.over) return;
   const p = toCanvas(e);
   const c = Math.floor(p.x / TILE), r = Math.floor(p.y / TILE);
   const existing = towerAt(c, r);
@@ -1152,7 +1518,7 @@ cvs.addEventListener('click', e => {
 });
 cvs.addEventListener('contextmenu', e => { e.preventDefault(); placing = null; selected = null; });
 window.addEventListener('keydown', e => {
-  if (!G.started) return;
+  if (mode !== 'play') return;
   const keys = Object.keys(TOWERS);
   if (e.key >= '1' && e.key <= String(keys.length)) togglePlacing(keys[+e.key - 1]);
   else if (e.key === 'Escape') { placing = null; selected = null; }
@@ -1164,15 +1530,16 @@ window.addEventListener('keydown', e => {
 // ---------------------------------------------------------------------------
 // Main loop
 // ---------------------------------------------------------------------------
-drawBackground();
 newGame();
 buildShop();
+showCampaign();
 
 let last = performance.now();
 function frame(now) {
   const dt = Math.min(0.05, (now - last) / 1000);
   last = now;
-  if (G.started && !G.paused) for (let i = 0; i < G.speed; i++) update(dt);
+  if (mode === 'play' && !G.paused) for (let i = 0; i < G.speed; i++) update(dt);
+  else if (mode === 'result') update(dt);
   else G.time += dt * 0.3;
   draw();
   syncUI();
