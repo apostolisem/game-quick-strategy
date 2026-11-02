@@ -250,6 +250,8 @@
 const TILE = 40, COLS = 16, ROWS = 24;
 const W = COLS * TILE, H = ROWS * TILE;
 const WAVES = 10;
+const AUTO_WAVE_DELAY = 8;   // seconds between clearing a wave and the next one starting by itself
+const EARLY_GOLD_PER_SEC = 2; // bonus for starting the next wave before the countdown ends
 const BASE_CASTLE_HP = 20;
 const SAVE_KEY = 'hand-of-the-king-v1';
 
@@ -292,33 +294,33 @@ const SEASONS = {
   },
 };
 
-// Roads start off-screen below the bottom edge (the void) and climb to the castle gate at the top.
-// The last two waypoints share a column: that column is where the gate (and castle) sits.
+// Roads are generated per campaign (see generateRoad). `runs` is how many sideways stretches
+// the road has, `horiz` the allowed total sideways length in tiles, `wide` forces long switchbacks.
 const LEVELS = [
   {
     name: 'Greenwood Pass', season: 'summer', gold: 160, diff: 1.0,
-    path: [[8, 25], [8, 19], [3, 19], [3, 13], [12, 13], [12, 8], [8, 8], [8, 4]],
+    road: { runs: [2, 3], horiz: [14, 24] },
     roster: ['goblin', 'wolf', 'orc'], midBoss: false, finalBosses: 1,
     desc: 'A quiet summer road through the Greenwood. Goblins, wolves and orcs are testing the King\'s defences. A good place to learn the ropes.',
     newFoes: 'Goblins, Wolves and Orcs. An Ogre Warlord leads the final wave.',
   },
   {
-    name: 'Amberleaf Hollow', season: 'autumn', gold: 190, diff: 1.5,
-    path: [[3, 25], [3, 17], [12, 17], [12, 11], [3, 11], [3, 6], [10, 6], [10, 4]],
+    name: 'Amberleaf Hollow', season: 'autumn', gold: 190, diff: 1.35,
+    road: { runs: [3, 3], horiz: [20, 30] },
     roster: ['goblin', 'wolf', 'orc', 'troll', 'knight'], midBoss: true, finalBosses: 1,
     desc: 'Falling leaves hide the road as it winds through the hollow. The enemy has brought heavier troops.',
     newFoes: '<b>Armored Knights</b>: their armor blocks part of every hit, so weak, fast shots barely scratch them. Catapults and upgraded weapons punch through. <b>Trolls</b> are slow but very tough.',
   },
   {
-    name: 'Frostpine Ridge', season: 'winter', gold: 230, diff: 1.85,
-    path: [[2, 25], [2, 20], [13, 20], [13, 16], [2, 16], [2, 12], [13, 12], [13, 8], [4, 8], [4, 4]],
+    name: 'Frostpine Ridge', season: 'winter', gold: 230, diff: 1.6,
+    road: { runs: [4, 4], horiz: [34, 46], wide: true },
     roster: ['goblin', 'wolf', 'orc', 'troll', 'knight', 'bat'], midBoss: true, finalBosses: 2,
     desc: 'A long road that switches back and forth up the snowy ridge. More road means more time to shoot, and more monsters to shoot at.',
     newFoes: '<b>Bats</b> fly above the road. Catapult stones can\'t hit them, so keep Archers and Frost Mages ready.',
   },
   {
-    name: 'Mirefen Crossing', season: 'swamp', gold: 270, diff: 1.25,
-    path: [[12, 25], [12, 16], [4, 16], [4, 9], [8, 9], [8, 4]],
+    name: 'Mirefen Crossing', season: 'swamp', gold: 270, diff: 1.55,
+    road: { runs: [2, 2], horiz: [8, 14] },
     roster: ['goblin', 'wolf', 'orc', 'troll', 'knight', 'bat'], midBoss: true, finalBosses: 2,
     desc: 'A short road across the bog leaves little room for error. Every kind of monster attacks here, and two Warlords lead the final wave.',
     newFoes: 'Everything at once. Plan your kill zone carefully: the road is short.',
@@ -360,7 +362,13 @@ const PERKS = [
 ];
 const PERK_MAX = 3;
 
-function hpScale(n) { const k = n - 1; return (1 + 0.2 * k + 0.015 * k * k) * LEVEL.diff; }
+// Roads with better build spots get tougher monsters, so random roads stay fair.
+const REF_POWER = 350;
+function hpScale(n) {
+  const k = n - 1;
+  const roadMul = Math.min(1.2, Math.max(0.8, (MAP.power / REF_POWER) ** 1.5));
+  return (1 + 0.2 * k + 0.015 * k * k) * LEVEL.diff * roadMul;
+}
 
 function buildWave(n, lvl = LEVEL) {
   const has = t => lvl.roster.includes(t);
@@ -379,7 +387,8 @@ function buildWave(n, lvl = LEVEL) {
     [groups[i], groups[j]] = [groups[j], groups[i]];
   }
   const bosses = n === WAVES ? lvl.finalBosses : (n === 5 && lvl.midBoss ? 1 : 0);
-  for (let i = 0; i < bosses; i++) groups.push({ type: 'ogre', gap: 3 });
+  // The mid-campaign Warlord is a lesser one, so wave 5 isn't a wall.
+  for (let i = 0; i < bosses; i++) groups.push({ type: 'ogre', gap: 3, hpMul: n === WAVES ? 1 : 0.6 });
   return groups;
 }
 
@@ -403,19 +412,25 @@ const starsHtml = n => '★'.repeat(n) + `<span class="off">${'★'.repeat(3 - n
 // Save data (stars per map, perk ranks)
 // ---------------------------------------------------------------------------
 function defaultPerks() { return Object.fromEntries(PERKS.map(p => [p.id, 0])); }
+const newSeed = () => Math.floor(Math.random() * 1e9);
 function loadSave() {
   try {
     const s = JSON.parse(localStorage.getItem(SAVE_KEY));
     if (s && Array.isArray(s.stars)) {
-      return { stars: LEVELS.map((_, i) => s.stars[i] || 0), perks: Object.assign(defaultPerks(), s.perks || {}) };
+      return {
+        stars: LEVELS.map((_, i) => s.stars[i] || 0),
+        perks: Object.assign(defaultPerks(), s.perks || {}),
+        seed: Number.isFinite(s.seed) ? s.seed : newSeed(),
+      };
     }
   } catch (e) { /* storage unavailable */ }
-  return { stars: LEVELS.map(() => 0), perks: defaultPerks() };
+  return { stars: LEVELS.map(() => 0), perks: defaultPerks(), seed: newSeed() };
 }
 function writeSave() {
   try { localStorage.setItem(SAVE_KEY, JSON.stringify(SAVE)); } catch (e) { /* storage unavailable */ }
 }
 const SAVE = loadSave();
+writeSave(); // persist a freshly rolled campaign seed
 const starsEarned = () => SAVE.stars.reduce((a, b) => a + b, 0);
 const starsSpent = () => Object.values(SAVE.perks).reduce((a, b) => a + b, 0);
 const starsAvailable = () => starsEarned() - starsSpent();
@@ -423,11 +438,51 @@ const perk = id => SAVE.perks[id] || 0;
 const unlocked = i => i === 0 || SAVE.stars[i - 1] > 0;
 
 // ---------------------------------------------------------------------------
+// Road generation. Rules:
+//  - the road enters from the void below the map (row 25) and ends going
+//    straight up into the castle gate (row 4); the gate column places the castle
+//  - it only moves up or sideways, so it can never cross itself
+//  - sideways stretches sit on rows 7..20, at least 3 rows apart, so there is
+//    always buildable ground between two parallel stretches
+//  - each sideways stretch is at least 3 tiles long (6 for `wide` roads)
+//  - columns stay 1 tile off the edges; the gate column keeps the castle on screen
+//  - the total sideways length must fall in the level's `horiz` range
+// ---------------------------------------------------------------------------
+function generateRoad(spec, rnd) {
+  const ri = (a, b) => a + Math.floor(rnd() * (b - a + 1));
+  const minRun = spec.wide ? 6 : 3;
+  for (let attempt = 0; attempt < 5000; attempt++) {
+    const n = ri(spec.runs[0], spec.runs[1]);
+    const rows = [];
+    let r = ri(16, 20);
+    for (let i = 0; i < n; i++) { rows.push(r); r -= ri(3, 6); }
+    if (rows[n - 1] < 7) continue;
+    const cols = [ri(2, 13)];
+    let horiz = 0, ok = true;
+    for (let i = 0; i < n; i++) {
+      const last = i === n - 1;
+      const lo = last ? 3 : 1, hi = last ? 12 : 14, prev = cols[i];
+      const choices = [];
+      for (let c = lo; c <= hi; c++) if (Math.abs(c - prev) >= minRun) choices.push(c);
+      if (!choices.length) { ok = false; break; }
+      const c = choices[Math.floor(rnd() * choices.length)];
+      horiz += Math.abs(c - prev);
+      cols.push(c);
+    }
+    if (!ok || horiz < spec.horiz[0] || horiz > spec.horiz[1]) continue;
+    const wp = [[cols[0], 25]];
+    for (let i = 0; i < n; i++) wp.push([cols[i], rows[i]], [cols[i + 1], rows[i]]);
+    wp.push([cols[n], 4]);
+    return wp;
+  }
+  return [[8, 25], [8, 19], [3, 19], [3, 13], [12, 13], [12, 8], [8, 8], [8, 4]]; // safe fallback
+}
+
+// ---------------------------------------------------------------------------
 // Maps: grid values 0 forest, 1 clearing (buildable), 2 path, 3 castle
 // ---------------------------------------------------------------------------
-function buildMap(lvl, index) {
+function buildMap(lvl, index, wp) {
   const grid = [...Array(ROWS)].map(() => Array(COLS).fill(0));
-  const wp = lvl.path;
   for (let i = 0; i < wp.length - 1; i++) {
     const [c0, r0] = wp[i], [c1, r1] = wp[i + 1];
     const dc = Math.sign(c1 - c0), dr = Math.sign(r1 - r0);
@@ -465,7 +520,25 @@ function buildMap(lvl, index) {
     segs.push({ a, b, len: l, start: len, ang: Math.atan2(b.y - a.y, b.x - a.x) });
     len += l;
   }
-  return { lvl, index, grid, pts, segs, len, castle };
+  const map = { lvl, index, grid, pts, segs, len, castle };
+  map.power = roadPower(map);
+  return map;
+}
+
+// How much road the 8 best build spots can cover (in 10px samples within an archer's range).
+function roadPower(map) {
+  const covs = [];
+  for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) {
+    if (map.grid[r][c] !== 1) continue;
+    const x = c * TILE + TILE / 2, y = r * TILE + TILE / 2;
+    let cov = 0;
+    for (let d = 0; d < map.len; d += 10) {
+      const p = pointAt(d, map);
+      if (Math.hypot(p.x - x, p.y - y) < 125) cov++;
+    }
+    covs.push(cov);
+  }
+  return covs.sort((a, b) => b - a).slice(0, 8).reduce((a, b) => a + b, 0);
 }
 
 function pointAt(d, map = MAP) {
@@ -553,7 +626,7 @@ function drawCastle(g, castle) {
 function renderMap(map) {
   const out = makeLayer(), g = out.getContext('2d');
   const S = SEASONS[map.lvl.season], grid = map.grid;
-  const R = mulberry32(1234 + map.index * 97);
+  const R = mulberry32(SAVE.seed + 1234 + map.index * 97);
   const tileAt = (x, y) => { const c = Math.floor(x / TILE), r = Math.floor(y / TILE); return inGrid(c, r) ? grid[r][c] : -1; };
 
   g.fillStyle = S.floor; g.fillRect(0, 0, W, H);
@@ -647,14 +720,18 @@ function renderFog() {
   f.fillStyle = grad; f.fillRect(0, H - 150, W, 150);
 }
 
-const MAPS = LEVELS.map(buildMap);
+let MAPS, BGS, THUMBS;
+function buildCampaign() {
+  MAPS = LEVELS.map((lvl, i) => buildMap(lvl, i, generateRoad(lvl.road, mulberry32(SAVE.seed * 31 + i * 7919))));
+  BGS = MAPS.map(renderMap);
+  THUMBS = BGS.map(bgc => {
+    const t = makeLayer(240, 360), g = t.getContext('2d');
+    g.drawImage(bgc, 0, 0, 240, 360); g.drawImage(fog, 0, 0, 240, 360);
+    return t.toDataURL('image/jpeg', 0.85);
+  });
+}
 renderFog();
-const BGS = MAPS.map(renderMap);
-const THUMBS = BGS.map(bgc => {
-  const t = makeLayer(240, 360), g = t.getContext('2d');
-  g.drawImage(bgc, 0, 0, 240, 360); g.drawImage(fog, 0, 0, 240, 360);
-  return t.toDataURL('image/jpeg', 0.85);
-});
+buildCampaign();
 
 // ---------------------------------------------------------------------------
 // Game state
@@ -670,7 +747,7 @@ let nextTowerId = 1;
 function newGame() {
   const maxHp = BASE_CASTLE_HP + 3 * perk('walls');
   G = {
-    gold: LEVEL.gold + 30 * perk('treasury'), hp: maxHp, maxHp, wave: 0, waveActive: false, pendingBonus: 0,
+    gold: LEVEL.gold + 30 * perk('treasury'), hp: maxHp, maxHp, wave: 0, waveActive: false, pendingBonus: 0, nextIn: 0,
     spawnQ: [], spawnT: 0,
     monsters: [], towers: [], projs: [], parts: [], texts: [],
     speed: 1, paused: false, over: false,
@@ -740,7 +817,11 @@ function startWave() {
     if (!canCallEarly()) return;
     early = earlyBonus();
     G.gold += G.pendingBonus + early;
+  } else if (G.nextIn > 0) {
+    early = Math.ceil(G.nextIn) * EARLY_GOLD_PER_SEC;
+    G.gold += early;
   }
+  G.nextIn = 0;
   G.wave++;
   G.spawnQ = buildWave(G.wave);
   G.spawnT = 0.6;
@@ -753,8 +834,8 @@ function startWave() {
   G.banner = { text, t: 2.4 };
 }
 
-function spawn(type) {
-  const d = MONSTERS[type], sc = hpScale(G.wave);
+function spawn(type, hpMul = 1) {
+  const d = MONSTERS[type], sc = hpScale(G.wave) * hpMul;
   const p = pointAt(0);
   G.monsters.push({
     type, hp: d.hp * sc, maxHp: d.hp * sc,
@@ -807,6 +888,7 @@ function waveDone() {
   G.gold += G.pendingBonus;
   G.banner = { text: `Wave cleared  +${G.pendingBonus} gold`, t: 2 };
   G.pendingBonus = 0;
+  if (G.wave < WAVES) G.nextIn = AUTO_WAVE_DELAY;
   if (G.wave >= WAVES) {
     G.over = true;
     G.banner = { text: 'Victory!', t: 3 };
@@ -861,11 +943,12 @@ function update(dt) {
   G.castleFlash = Math.max(0, G.castleFlash - dt);
   if (G.over) { updateEffects(dt); return; }
 
+  if (!G.waveActive && G.nextIn > 0 && (G.nextIn -= dt) <= 0) startWave();
   if (G.waveActive) {
     G.spawnT -= dt;
     if (G.spawnQ.length && G.spawnT <= 0) {
       const s = G.spawnQ.shift();
-      spawn(s.type);
+      spawn(s.type, s.hpMul);
       G.spawnT = s.gap;
     }
   }
@@ -1347,7 +1430,8 @@ function syncUI() {
   }
 
   let label;
-  if (!G.waveActive) label = G.wave >= WAVES ? 'All waves done' : `Start Wave ${G.wave + 1}`;
+  if (!G.waveActive && G.nextIn > 0) label = `Wave ${G.wave + 1} in ${Math.ceil(G.nextIn)}s · start now (+${Math.ceil(G.nextIn) * EARLY_GOLD_PER_SEC}g)`;
+  else if (!G.waveActive) label = G.wave >= WAVES ? 'All waves done' : `Start Wave ${G.wave + 1}`;
   else if (canCallEarly()) label = `Call Wave ${G.wave + 1} early (+${earlyBonus()}g)`;
   else if (G.wave >= WAVES) label = 'Final wave!';
   else label = `Wave ${G.wave} arriving…`;
@@ -1396,6 +1480,13 @@ const ACTIONS = {
     if (starsAvailable() > 0 && perk(id) < PERK_MAX) { SAVE.perks[id]++; writeSave(); showCampaign(); }
   },
   resetPerks: () => { SAVE.perks = defaultPerks(); writeSave(); showCampaign(); },
+  newCampaign: () => {
+    SAVE.seed = newSeed(); writeSave();
+    buildCampaign();
+    LEVEL = LEVELS[0]; MAP = MAPS[0]; BG = BGS[0];
+    newGame();
+    showCampaign();
+  },
 };
 ovCard.addEventListener('click', e => {
   const b = e.target.closest('[data-act]');
@@ -1430,6 +1521,10 @@ function showCampaign() {
     <p class="muted">Monsters are pouring out of the void. As Hand of the King you must hold each road to the castle for ${WAVES} waves.
       Win a road to unlock the next. Earn up to 3 stars per road (3 if the castle takes no damage) and spend them on permanent perks.</p>
     <div class="maps">${cards}</div>
+    <div class="btn-row" style="margin-top:12px">
+      <button data-act="newCampaign" title="Your stars and perks are kept">New campaign: scout new roads</button>
+    </div>
+    <p class="muted" style="margin:6px 0 0">Roads #${SAVE.seed.toString(36).toUpperCase()} · stars and perks carry over to a new campaign</p>
     <h3>Royal Perks <span>★ ${avail} to spend · ${starsEarned()}/${LEVELS.length * 3} earned</span></h3>
     <div class="perks">${perks}</div>
     <div class="btn-row" style="margin-top:12px"><button data-act="resetPerks" ${starsSpent() ? '' : 'disabled'}>Refund all perks</button></div>
