@@ -132,6 +132,7 @@
   #info .up { color: var(--accent); }
   #info .row { display: flex; gap: 6px; }
   #info .row button { flex: 1; }
+  #info button.aim { width: 100%; margin-bottom: 6px; font-size: 12px; }
   #info p { margin: 0 0 6px; color: var(--muted); line-height: 1.4; }
   .controls { display: flex; gap: 6px; margin-top: 12px; }
   #startBtn { flex: 1; }
@@ -234,9 +235,9 @@
     <button id="retreatBtn">Retreat to campaign map</button>
 
     <p class="help">
-      <kbd>1</kbd><kbd>2</kbd><kbd>3</kbd> pick a weapon · click the light grass to place it<br>
+      <kbd>1</kbd><kbd>2</kbd><kbd>3</kbd> pick a weapon · click a stone pad to build it<br>
       <kbd>Shift</kbd>+click places several · <kbd>Esc</kbd>/right-click cancels<br>
-      Click a weapon to upgrade or sell it (<kbd>U</kbd> upgrades)<br>
+      Click a weapon to upgrade or sell it (<kbd>U</kbd> upgrades, <kbd>T</kbd> changes its target)<br>
       <kbd>Space</kbd> starts a wave, or calls the next one early for bonus gold · <kbd>P</kbd> pauses · <kbd>M</kbd> sound
     </p>
   </aside>
@@ -300,28 +301,28 @@ const SEASONS = {
 // the road has, `horiz` the allowed total sideways length in tiles, `wide` forces long switchbacks.
 const LEVELS = [
   {
-    name: 'Greenwood Pass', season: 'summer', gold: 160, diff: 1.0,
+    name: 'Greenwood Pass', season: 'summer', gold: 160, diff: 1.0, pads: 12,
     road: { runs: [2, 3], horiz: [14, 24] },
     roster: ['goblin', 'wolf', 'orc'], midBoss: false, finalBosses: 1,
     desc: 'A quiet summer road through the Greenwood. Goblins, wolves and orcs are testing the King\'s defences. A good place to learn the ropes.',
     newFoes: 'Goblins, Wolves and Orcs. An Ogre Warlord leads the final wave.',
   },
   {
-    name: 'Amberleaf Hollow', season: 'autumn', gold: 190, diff: 1.35,
+    name: 'Amberleaf Hollow', season: 'autumn', gold: 190, diff: 1.35, pads: 12,
     road: { runs: [3, 3], horiz: [20, 30] },
     roster: ['goblin', 'wolf', 'orc', 'troll', 'knight'], midBoss: true, finalBosses: 1,
     desc: 'Falling leaves hide the road as it winds through the hollow. The enemy has brought heavier troops.',
     newFoes: '<b>Armored Knights</b>: their armor blocks part of every hit, so weak, fast shots barely scratch them. Catapults and upgraded weapons punch through. <b>Trolls</b> are slow but very tough.',
   },
   {
-    name: 'Frostpine Ridge', season: 'winter', gold: 230, diff: 1.6,
+    name: 'Frostpine Ridge', season: 'winter', gold: 230, diff: 1.6, pads: 14,
     road: { runs: [4, 4], horiz: [34, 46], wide: true },
     roster: ['goblin', 'wolf', 'orc', 'troll', 'knight', 'bat'], midBoss: true, finalBosses: 2,
     desc: 'A long road that switches back and forth up the snowy ridge. More road means more time to shoot, and more monsters to shoot at.',
     newFoes: '<b>Bats</b> fly above the road. Catapult stones can\'t hit them, so keep Archers and Frost Mages ready.',
   },
   {
-    name: 'Mirefen Crossing', season: 'swamp', gold: 270, diff: 1.55,
+    name: 'Mirefen Crossing', season: 'swamp', gold: 270, diff: 1.55, pads: 10,
     road: { runs: [2, 2], horiz: [8, 14] },
     roster: ['goblin', 'wolf', 'orc', 'troll', 'knight', 'bat'], midBoss: true, finalBosses: 2,
     desc: 'A short road across the bog leaves little room for error. Every kind of monster attacks here, and two Warlords lead the final wave.',
@@ -365,7 +366,7 @@ const PERKS = [
 const PERK_MAX = 3;
 
 // Roads with better build spots get tougher monsters, so random roads stay fair.
-const REF_POWER = 350;
+const REF_POWER = 290; // typical pad coverage; see roadPower
 // Waves are numbered 1..WAVES; `e` maps them onto the original 10-wave difficulty curve.
 const effWave = n => n * 10 / WAVES;
 function hpScale(n) {
@@ -566,9 +567,10 @@ function generateRoad(spec, rnd) {
 }
 
 // ---------------------------------------------------------------------------
-// Maps: grid values 0 forest, 1 clearing (buildable), 2 path, 3 castle
+// Maps: grid values 0 forest, 1 clearing, 2 path, 3 castle, 4 build pad
 // ---------------------------------------------------------------------------
-function buildMap(lvl, index, wp) {
+const PAD = 4;
+function buildMap(lvl, index, wp, seed) {
   const grid = [...Array(ROWS)].map(() => Array(COLS).fill(0));
   for (let i = 0; i < wp.length - 1; i++) {
     const [c0, r0] = wp[i], [c1, r1] = wp[i + 1];
@@ -608,15 +610,40 @@ function buildMap(lvl, index, wp) {
     len += l;
   }
   const map = { lvl, index, grid, pts, segs, len, castle };
+  choosePads(map, lvl.pads, mulberry32(seed));
   map.power = roadPower(map);
   return map;
 }
 
-// How much road the 8 best build spots can cover (in 10px samples within an archer's range).
+// Towers can only stand on a limited number of stone pads, so where to build is a real choice.
+// Pads favour tiles that see a lot of road (bends, switchbacks) with some randomness, and never touch each other.
+function choosePads(map, count, rnd) {
+  const cands = [];
+  for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) {
+    if (map.grid[r][c] !== 1) continue;
+    const x = c * TILE + TILE / 2, y = r * TILE + TILE / 2;
+    let cov = 0;
+    for (let d = 0; d < map.len; d += 10) {
+      const p = pointAt(d, map);
+      if (Math.hypot(p.x - x, p.y - y) < 130) cov++;
+    }
+    if (cov > 0) cands.push({ c, r, score: cov * (0.6 + 0.8 * rnd()) });
+  }
+  cands.sort((a, b) => b.score - a.score);
+  const pads = [];
+  for (const k of cands) {
+    if (pads.length >= count) break;
+    if (pads.every(p => Math.max(Math.abs(p.c - k.c), Math.abs(p.r - k.r)) >= 2)) pads.push(k);
+  }
+  for (const p of pads) map.grid[p.r][p.c] = PAD;
+  map.pads = pads;
+}
+
+// How much road the 8 best build pads can cover (in 10px samples within an archer's range).
 function roadPower(map) {
   const covs = [];
   for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) {
-    if (map.grid[r][c] !== 1) continue;
+    if (map.grid[r][c] !== PAD) continue;
     const x = c * TILE + TILE / 2, y = r * TILE + TILE / 2;
     let cov = 0;
     for (let d = 0; d < map.len; d += 10) {
@@ -879,6 +906,21 @@ function drawCastle(g, castle, S) {
   }
 }
 
+// A round flagstone platform that marks a build spot.
+function drawPad(g, x, y, S, R) {
+  g.fillStyle = 'rgba(0,0,0,.35)'; circle(g, x + 3, y + 4, 18);
+  g.fillStyle = S.snow ? '#9aa3aa' : '#6d665a'; circle(g, x, y, 18);
+  g.fillStyle = S.snow ? '#c9d0d6' : '#a39b8a'; circle(g, x, y, 16);
+  g.strokeStyle = 'rgba(40,34,26,.55)'; g.lineWidth = 1;
+  for (let i = 0; i < 6; i++) {
+    const a = i / 6 * Math.PI * 2 + R();
+    g.beginPath(); g.moveTo(x + Math.cos(a) * 6, y + Math.sin(a) * 6); g.lineTo(x + Math.cos(a) * 16, y + Math.sin(a) * 16); g.stroke();
+  }
+  g.beginPath(); g.arc(x, y, 6, 0, Math.PI * 2); g.stroke();
+  g.fillStyle = 'rgba(255,255,255,.18)'; circle(g, x - 5, y - 6, 5);
+  if (S.snow) { g.fillStyle = 'rgba(255,255,255,.6)'; circle(g, x - 8, y - 9, 3.5); circle(g, x + 9, y + 6, 2.5); }
+}
+
 function renderMap(map) {
   const out = makeLayer(), g = out.getContext('2d');
   const S = SEASONS[map.lvl.season], grid = map.grid;
@@ -952,6 +994,7 @@ function renderMap(map) {
       g.beginPath(); g.ellipse(R() * W, R() * H, 2.2, 1.2, R() * Math.PI, 0, Math.PI * 2); g.fill();
     }
   }
+  for (const p of map.pads) drawPad(g, p.c * TILE + TILE / 2, p.r * TILE + TILE / 2, S, R);
   const trees = [];
   for (let r = -1; r <= ROWS; r++) for (let c = -1; c <= COLS; c++) {
     if (inGrid(c, r) && grid[r][c] !== 0) continue;
@@ -978,7 +1021,7 @@ function renderFog() {
 
 let MAPS, BGS, THUMBS;
 function buildCampaign() {
-  MAPS = LEVELS.map((lvl, i) => buildMap(lvl, i, generateRoad(lvl.road, mulberry32(SAVE.seed * 31 + i * 7919))));
+  MAPS = LEVELS.map((lvl, i) => buildMap(lvl, i, generateRoad(lvl.road, mulberry32(SAVE.seed * 31 + i * 7919)), SAVE.seed * 17 + i * 389));
   BGS = MAPS.map(renderMap);
   THUMBS = BGS.map(bgc => {
     const t = makeLayer(240, 360, 1), g = t.getContext('2d');
@@ -1016,7 +1059,7 @@ function newGame() {
 }
 
 function towerAt(c, r) { return G.towers.find(t => t.c === c && t.r === r); }
-function canBuild(c, r) { return inGrid(c, r) && MAP.grid[r][c] === 1 && !towerAt(c, r); }
+function canBuild(c, r) { return inGrid(c, r) && MAP.grid[r][c] === PAD && !towerAt(c, r); }
 
 function stats(t) {
   const b = TOWERS[t.type], L = t.level - 1, p = perk(b.perk);
@@ -1041,7 +1084,7 @@ function placeTower(type, c, r) {
   G.gold -= cost;
   const t = {
     id: nextTowerId++, type, c, r, x: c * TILE + TILE / 2, y: r * TILE + TILE / 2,
-    level: 1, spent: cost, cd: 0, ang: -Math.PI / 2, anim: 0, kills: 0,
+    level: 1, spent: cost, cd: 0, ang: -Math.PI / 2, anim: 0, kills: 0, aim: 'first',
   };
   G.towers.push(t);
   puff(t.x, t.y, '#c9b38a', 12);
@@ -1182,11 +1225,28 @@ function floatText(x, y, text, color, life = 1.1) { G.texts.push({ x, y, text, c
 // ---------------------------------------------------------------------------
 // Update
 // ---------------------------------------------------------------------------
+// Which monster a tower prefers. Players cycle this per tower (T key or the Details panel).
+const AIMS = {
+  first:  { name: 'First',     score: (t, m) => m.dist },
+  strong: { name: 'Strongest', score: (t, m) => m.hp },
+  weak:   { name: 'Weakest',   score: (t, m) => -m.hp },
+  close:  { name: 'Closest',   score: (t, m) => -dist(t, m) },
+};
+const AIM_KEYS = Object.keys(AIMS);
+function cycleAim(t) {
+  if (!t) return;
+  t.aim = AIM_KEYS[(AIM_KEYS.indexOf(t.aim) + 1) % AIM_KEYS.length];
+  SFX.play('click');
+}
+
 function findTarget(t, range, air) {
-  let best = null;
+  const score = AIMS[t.aim || 'first'].score;
+  let best = null, bestS = -Infinity;
   for (const m of G.monsters) {
     if (m.dead || (m.fly && !air)) continue;
-    if (dist(t, m) <= range && (!best || m.dist > best.dist)) best = m;
+    if (dist(t, m) > range) continue;
+    const s = score(t, m);
+    if (s > bestS) { best = m; bestS = s; }
   }
   return best;
 }
@@ -1735,9 +1795,10 @@ function draw() {
   ctx.drawImage(decal, 0, 0, W, H);
 
   if (placing) {
-    ctx.strokeStyle = 'rgba(255,255,255,.14)'; ctx.lineWidth = 1;
-    for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) {
-      if (canBuild(c, r)) ctx.strokeRect(c * TILE + 2.5, r * TILE + 2.5, TILE - 5, TILE - 5);
+    ctx.strokeStyle = `rgba(255,235,170,${0.45 + 0.3 * Math.sin(G.time * 6)})`; ctx.lineWidth = 2;
+    for (const p of MAP.pads) {
+      if (!canBuild(p.c, p.r)) continue;
+      ctx.beginPath(); ctx.arc(p.c * TILE + TILE / 2, p.r * TILE + TILE / 2, 19, 0, Math.PI * 2); ctx.stroke();
     }
   }
 
@@ -1851,7 +1912,7 @@ function fmtStats(s) {
 
 function renderInfo() {
   let key;
-  if (selected) key = `t${selected.id}-${selected.level}`;
+  if (selected) key = `t${selected.id}-${selected.level}-${selected.aim}`;
   else if (placing) key = 'p-' + placing;
   else key = 'none';
   if (key === infoKey) return;
@@ -1866,11 +1927,13 @@ function renderInfo() {
       <h3>${b.name} · Lv ${t.level}/${MAX_LEVEL}</h3>
       <table>${cur.map((r, i) => `<tr><td>${r[0]}</td><td>${r[1]}${nxt && nxt[i][1] !== r[1] ? ` <span class="up">→ ${nxt[i][1]}</span>` : ''}</td></tr>`).join('')}
       <tr><td>Kills</td><td id="kills">${t.kills}</td></tr></table>
+      <button id="aimBtn" class="aim" title="Which monster to shoot (T)">Target: ${AIMS[t.aim].name}</button>
       <div class="row">
         <button id="upBtn">${maxed ? 'Max level' : `Upgrade (${upgradeCost(t)}g)`}</button>
         <button id="sellBtn">Sell (+${sellValue(t)}g)</button>
       </div>`;
     $('upBtn').onclick = () => upgradeTower(selected);
+    $('aimBtn').onclick = () => cycleAim(selected);
     $('sellBtn').onclick = () => sellTower(selected);
   } else if (placing) {
     const b = TOWERS[placing];
@@ -1879,11 +1942,11 @@ function renderInfo() {
       <h3>${b.name} · ${b.cost} gold</h3>
       <p>${b.desc}</p>
       <table>${fmtStats(s).map(r => `<tr><td>${r[0]}</td><td>${r[1]}</td></tr>`).join('')}</table>
-      <p>Click a light-grass tile next to the path. Shift+click to place several.</p>`;
+      <p>Click a free stone pad next to the road. Shift+click to place several.</p>`;
   } else {
     els.info.innerHTML = `
-      <p>Choose a weapon from the armory and place it on the light grass along the road.</p>
-      <p>Weapons fire on their own at the monster furthest along the road. Keep 80% of the castle's health for <span style="color:var(--gold)">★★★</span>.</p>`;
+      <p>Choose a weapon from the armory and build it on one of the stone pads along the road. Pads are limited, so pick them well.</p>
+      <p>Weapons fire on their own. Click one to change which monster it aims at. Keep 80% of the castle's health for <span style="color:var(--gold)">★★★</span>.</p>`;
   }
 }
 
@@ -2105,6 +2168,7 @@ window.addEventListener('keydown', e => {
   else if (e.key === ' ') { e.preventDefault(); startWave(); }
   else if (e.key === 'p' || e.key === 'P') G.paused = !G.paused;
   else if (e.key === 'u' || e.key === 'U') upgradeTower(selected);
+  else if (e.key === 't' || e.key === 'T') cycleAim(selected);
 });
 
 // ---------------------------------------------------------------------------
