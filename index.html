@@ -189,6 +189,11 @@
   .map-card .meta { padding: 8px 10px 10px; }
   .map-card strong { display: block; font-size: 14px; }
   .map-card small { display: block; color: var(--muted); font-size: 11px; margin-top: 2px; }
+  .daily-card { display: flex; gap: 12px; align-items: center; width: 100%; text-align: left; padding: 8px; }
+  .daily-card img { width: 64px; aspect-ratio: 2 / 3; border-radius: 4px; flex: none; object-fit: cover; }
+  .daily-card strong { display: block; font-size: 15px; color: var(--gold); }
+  .daily-card small { display: block; color: var(--muted); font-size: 12px; margin-top: 2px; }
+  .daily-card:disabled img { filter: grayscale(1) brightness(.35); }
   .map-card:disabled img { filter: grayscale(1) brightness(.35); }
   .map-card:disabled { opacity: .8; }
   .stars { color: var(--gold); letter-spacing: 2px; font-size: 15px; }
@@ -210,6 +215,41 @@
   @media (max-width: 960px) {
     #game { flex-direction: column; align-items: stretch; }
     #panel { width: auto; }
+  }
+  /* Phones: the map fills the screen and a compact control bar sticks to the bottom. */
+  @media (max-width: 760px) {
+    #game { padding: 6px; gap: 6px; }
+    #stage { width: min(100%, calc((100dvh - 200px) * 2 / 3)); margin: 0 auto; }
+    canvas#c { border-width: 2px; }
+    #panel {
+      position: sticky; bottom: 0; z-index: 5; padding: 6px; border-radius: 8px;
+      display: grid; gap: 5px; grid-template-columns: 1fr 1fr;
+      grid-template-areas: "stats controls" "shop powers" "next retreat" "info info";
+    }
+    #panel h1, #panel .sub, #panel h2, #panel .help { display: none; }
+    .stats { grid-area: stats; gap: 3px; }
+    .stat { padding: 2px; }
+    .stat .val { font-size: 15px; }
+    .stat .label { font-size: 9px; letter-spacing: 0; }
+    .controls { grid-area: controls; margin: 0; gap: 3px; }
+    .controls button { padding: 4px 6px; font-size: 12px; }
+    #startBtn { font-size: 11px; line-height: 1.15; }
+    #shop { grid-area: shop; display: grid; grid-template-columns: repeat(3, 1fr); gap: 3px; }
+    .shop-item { flex-direction: column; gap: 0; padding: 3px; margin: 0; text-align: center; }
+    .shop-item canvas { width: 34px; height: 34px; }
+    .shop-item strong, .shop-item small, .shop-item kbd { display: none; }
+    .shop-item .cost { font-size: 11px; }
+    #powers { grid-area: powers; gap: 3px; }
+    .power { padding: 3px 5px; }
+    .power strong { font-size: 11px; }
+    .power kbd { display: none; }
+    #nextWave { grid-area: next; margin: 0; font-size: 11px; min-height: 0; }
+    #retreatBtn { grid-area: retreat; margin: 0; padding: 4px; font-size: 11px; }
+    #info { grid-area: info; display: none; min-height: 0; padding: 6px 8px; font-size: 12px; }
+    #panel.show-info #info { display: block; }
+    #panel.brief-info #info table, #panel.brief-info #info p:not(:last-child) { display: none; }
+    #info h3 { font-size: 13px; }
+    #info table { margin-bottom: 4px; }
   }
 </style>
 </head>
@@ -344,6 +384,22 @@ const LEVELS = [
   },
 ];
 
+// Daily Siege: endless waves on a road generated from today's date, the same for every player.
+const dailySeed = () => { const d = new Date(); return d.getFullYear() * 10000 + (d.getMonth() + 1) * 100 + d.getDate(); };
+const DAILY = (() => {
+  const seed = dailySeed(), seasons = Object.keys(SEASONS);
+  return {
+    name: 'Daily Siege', season: seasons[seed % seasons.length], gold: 240, diff: 1.15, pads: 12,
+    road: { runs: [2, 4], horiz: [14, 34] }, endless: true, seed,
+    roster: ['goblin', 'wolf', 'orc', 'troll', 'knight', 'bat', 'shaman', 'raven'], midBoss: true, finalBosses: 1,
+    desc: 'Endless waves on today\'s road. Everyone gets the same road today, so compare your best with friends.',
+    newFoes: 'Every monster, getting stronger each wave. A Warlord arrives every 4 waves. How long can you hold?',
+  };
+})();
+const DAILY_INDEX = LEVELS.length;
+const levelAt = i => i === DAILY_INDEX ? DAILY : LEVELS[i];
+const lastWave = () => LEVEL.endless ? Infinity : WAVES;
+
 const TOWERS = {
   archer: {
     name: 'Archer Tower', cost: 60, range: 130, damage: 8, rate: 0.6, air: true, perk: 'arrows',
@@ -400,7 +456,8 @@ const effWave = n => n * 10 / WAVES;
 function hpScale(n) {
   const k = effWave(n) - 1;
   const roadMul = Math.min(1.2, Math.max(0.8, (MAP.power / REF_POWER) ** 1.5));
-  return (1 + 0.2 * k + 0.015 * k * k) * LEVEL.diff * roadMul;
+  const endless = LEVEL.endless ? 1.08 ** n : 1; // the Daily Siege keeps getting harder
+  return (1 + 0.2 * k + 0.015 * k * k) * LEVEL.diff * roadMul * endless;
 }
 
 function buildWave(n, lvl = LEVEL) {
@@ -423,9 +480,11 @@ function buildWave(n, lvl = LEVEL) {
     const j = Math.floor(rnd() * (i + 1));
     [groups[i], groups[j]] = [groups[j], groups[i]];
   }
-  const bosses = n === WAVES ? lvl.finalBosses : (n === WAVES / 2 && lvl.midBoss ? 1 : 0);
-  // The mid-campaign Warlord is a lesser one, so wave 5 isn't a wall.
-  for (let i = 0; i < bosses; i++) groups.push({ type: 'ogre', gap: 3, hpMul: n === WAVES ? 1 : 0.6 });
+  let bosses, full;
+  if (lvl.endless) { bosses = n % 4 === 0 ? 1 + Math.floor(n / 12) : 0; full = n % 8 === 0; }
+  else { bosses = n === WAVES ? lvl.finalBosses : (n === WAVES / 2 && lvl.midBoss ? 1 : 0); full = n === WAVES; }
+  // The mid-road Warlord is a lesser one, so the middle wave isn't a wall.
+  for (let i = 0; i < bosses; i++) groups.push({ type: 'ogre', gap: 3, hpMul: full ? 1 : lvl.endless && n < 8 ? 0.45 : 0.6 });
   return groups;
 }
 
@@ -539,10 +598,12 @@ function loadSave() {
         stars: LEVELS.map((_, i) => s.stars[i] || 0),
         perks: Object.assign(defaultPerks(), s.perks || {}),
         seed: Number.isFinite(s.seed) ? s.seed : newSeed(),
+        daily: s.daily && Number.isFinite(s.daily.seed) ? s.daily : { seed: 0, best: 0 },
+        bestEndless: s.bestEndless || 0,
       };
     }
   } catch (e) { /* storage unavailable */ }
-  return { stars: LEVELS.map(() => 0), perks: defaultPerks(), seed: newSeed() };
+  return { stars: LEVELS.map(() => 0), perks: defaultPerks(), seed: newSeed(), daily: { seed: 0, best: 0 }, bestEndless: 0 };
 }
 function writeSave() {
   try { localStorage.setItem(SAVE_KEY, JSON.stringify(SAVE)); } catch (e) { /* storage unavailable */ }
@@ -554,6 +615,7 @@ const starsSpent = () => Object.values(SAVE.perks).reduce((a, b) => a + b, 0);
 const starsAvailable = () => starsEarned() - starsSpent();
 const perk = id => SAVE.perks[id] || 0;
 const unlocked = i => i === 0 || SAVE.stars[i - 1] > 0;
+const dailyBest = () => SAVE.daily.seed === DAILY.seed ? SAVE.daily.best : 0;
 
 // ---------------------------------------------------------------------------
 // Road generation. Rules:
@@ -954,7 +1016,7 @@ function drawPad(g, x, y, S, R) {
 function renderMap(map) {
   const out = makeLayer(), g = out.getContext('2d');
   const S = SEASONS[map.lvl.season], grid = map.grid;
-  const R = mulberry32(SAVE.seed + 1234 + map.index * 97);
+  const R = mulberry32((map.lvl.endless ? map.lvl.seed : SAVE.seed) + 1234 + map.index * 97);
   const tileAt = (x, y) => { const c = Math.floor(x / TILE), r = Math.floor(y / TILE); return inGrid(c, r) ? grid[r][c] : -1; };
 
   g.fillStyle = S.floor; g.fillRect(0, 0, W, H);
@@ -1052,6 +1114,7 @@ function renderFog() {
 let MAPS, BGS, THUMBS;
 function buildCampaign() {
   MAPS = LEVELS.map((lvl, i) => buildMap(lvl, i, generateRoad(lvl.road, mulberry32(SAVE.seed * 31 + i * 7919)), SAVE.seed * 17 + i * 389));
+  MAPS.push(buildMap(DAILY, DAILY_INDEX, generateRoad(DAILY.road, mulberry32(DAILY.seed * 7)), DAILY.seed * 3));
   BGS = MAPS.map(renderMap);
   THUMBS = BGS.map(bgc => {
     const t = makeLayer(240, 360, 1), g = t.getContext('2d');
@@ -1112,7 +1175,7 @@ function stats(t) {
 const upgradeCost = t => Math.round(TOWERS[t.type].cost * 0.75 * t.level);
 const sellValue = t => Math.floor(t.spent * 0.7);
 const earlyBonus = () => Math.round(G.pendingBonus * 0.5);
-const canCallEarly = () => G.waveActive && !G.spawnQ.length && G.wave < WAVES && !G.over;
+const canCallEarly = () => G.waveActive && !G.spawnQ.length && G.wave < lastWave() && !G.over;
 
 function placeTower(type, c, r) {
   const cost = TOWERS[type].cost;
@@ -1154,7 +1217,7 @@ function sellTower(t) {
 }
 
 function startWave() {
-  if (mode !== 'play' || G.over || G.wave >= WAVES) return;
+  if (mode !== 'play' || G.over || G.wave >= lastWave()) return;
   let early = 0;
   if (G.waveActive) {
     if (!canCallEarly()) return;
@@ -1171,7 +1234,7 @@ function startWave() {
   G.waveActive = true;
   G.pendingBonus = 20 + 5 * G.wave;
   const boss = G.spawnQ.some(s => MONSTERS[s.type].boss);
-  let text = G.wave === WAVES ? `Final wave!` : `Wave ${G.wave}`;
+  let text = G.wave === lastWave() ? `Final wave!` : `Wave ${G.wave}`;
   if (boss) text += ' — a Warlord approaches!';
   if (early) text = `Called early! +${early} bonus gold`;
   G.banner = { text, t: 2.4 };
@@ -1252,8 +1315,9 @@ function waveDone() {
   G.banner = { text: `Wave cleared  +${G.pendingBonus} gold`, t: 2 };
   SFX.play('coin');
   G.pendingBonus = 0;
-  if (G.wave < WAVES) G.nextIn = AUTO_WAVE_DELAY;
-  if (G.wave >= WAVES) {
+  G.cleared = G.wave;
+  if (G.wave < lastWave()) G.nextIn = AUTO_WAVE_DELAY;
+  if (G.wave >= lastWave()) {
     G.over = true;
     G.banner = { text: 'Victory!', t: 3 };
     const g = G;
@@ -2172,7 +2236,7 @@ function draw() {
 const $ = id => document.getElementById(id);
 const els = {
   gold: $('gold'), hp: $('hp'), wave: $('wave'), info: $('info'), start: $('startBtn'),
-  speed: $('speedBtn'), pause: $('pauseBtn'), mute: $('muteBtn'), next: $('nextWave'), mapName: $('mapName'), retreat: $('retreatBtn'),
+  speed: $('speedBtn'), pause: $('pauseBtn'), mute: $('muteBtn'), panel: $('panel'), next: $('nextWave'), mapName: $('mapName'), retreat: $('retreatBtn'),
 };
 const setText = (el, v) => { v = String(v); if (el.textContent !== v) el.textContent = v; };
 const shopButtons = {};
@@ -2230,8 +2294,8 @@ function fmtStats(s) {
 function renderInfo() {
   let key;
   if (selected) key = `t${selected.id}-${selected.level}-${selected.aim}`;
-  else if (aiming) key = 'a-' + aiming;
-  else if (placing) key = 'p-' + placing;
+  else if (aiming) key = 'a-' + aiming + lastPointer;
+  else if (placing) key = 'p-' + placing + lastPointer;
   else key = 'none';
   if (key === infoKey) return;
   infoKey = key;
@@ -2264,7 +2328,7 @@ function renderInfo() {
       <h3>${pw.name}</h3>
       <p>${pw.desc}</p>
       ${aiming === 'volley' ? `<table><tr><td>Damage</td><td>${volleyDamage()}</td></tr><tr><td>Radius</td><td>${POWERS.volley.radius}</td></tr></table>` : ''}
-      <p>Click the map to use it. Cooldown ${pw.cd}s. Esc cancels.</p>`;
+      <p>${lastPointer === 'touch' ? 'Tap the map to aim, tap again to fire.' : 'Click the map to use it. Esc cancels.'} Cooldown ${pw.cd}s.</p>`;
   } else if (placing) {
     const b = TOWERS[placing];
     const s = stats({ type: placing, level: 1 });
@@ -2272,7 +2336,7 @@ function renderInfo() {
       <h3>${b.name} · ${b.cost} gold</h3>
       <p>${b.desc}</p>
       <table>${fmtStats(s).map(r => `<tr><td>${r[0]}</td><td>${r[1]}</td></tr>`).join('')}</table>
-      <p>Click a free stone pad next to the road. Shift+click to place several.</p>`;
+      <p>${lastPointer === 'touch' ? 'Tap a free stone pad to preview, tap it again to build.' : 'Click a free stone pad next to the road. Shift+click to place several.'}</p>`;
   } else {
     els.info.innerHTML = `
       <p>Choose a weapon from the armory and build it on one of the stone pads along the road. Pads are limited, so pick them well.</p>
@@ -2281,10 +2345,10 @@ function renderInfo() {
 }
 
 function syncUI() {
-  setText(els.mapName, `${MAP.index + 1}. ${LEVEL.name} · ${SEASONS[LEVEL.season].label}`);
+  setText(els.mapName, LEVEL.endless ? `${LEVEL.name} · ${SEASONS[LEVEL.season].label}` : `${MAP.index + 1}. ${LEVEL.name} · ${SEASONS[LEVEL.season].label}`);
   setText(els.gold, G.gold);
   setText(els.hp, G.hp);
-  setText(els.wave, `${G.wave}/${WAVES}`);
+  setText(els.wave, LEVEL.endless ? G.wave : `${G.wave}/${WAVES}`);
   const playing = mode === 'play' && !G.over;
   for (const [key, b] of Object.entries(shopButtons)) {
     b.disabled = !playing || G.gold < TOWERS[key].cost;
@@ -2300,6 +2364,8 @@ function syncUI() {
     setText(pb.label, aiming === key ? 'Click the map' : ready ? 'Ready' : Math.ceil(cd) + 's');
   }
   renderInfo();
+  els.panel.classList.toggle('show-info', !!(selected || placing || aiming));
+  els.panel.classList.toggle('brief-info', !selected && !!(placing || aiming));
   if (selected) {
     const k = $('kills'); if (k) setText(k, selected.kills);
     const up = $('upBtn'); if (up) up.disabled = selected.level >= MAX_LEVEL || G.gold < upgradeCost(selected);
@@ -2308,19 +2374,19 @@ function syncUI() {
 
   let label;
   if (!G.waveActive && G.nextIn > 0) label = `Wave ${G.wave + 1} in ${Math.ceil(G.nextIn)}s · start now (+${Math.ceil(G.nextIn) * EARLY_GOLD_PER_SEC}g)`;
-  else if (!G.waveActive) label = G.wave >= WAVES ? 'All waves done' : `Start Wave ${G.wave + 1}`;
+  else if (!G.waveActive) label = G.wave >= lastWave() ? 'All waves done' : `Start Wave ${G.wave + 1}`;
   else if (canCallEarly()) label = `Call Wave ${G.wave + 1} early (+${earlyBonus()}g)`;
-  else if (G.wave >= WAVES) label = 'Final wave!';
+  else if (G.wave >= lastWave()) label = 'Final wave!';
   else label = `Wave ${G.wave} arriving…`;
   setText(els.start, label);
-  els.start.disabled = !playing || (G.waveActive && !canCallEarly()) || (!G.waveActive && G.wave >= WAVES);
+  els.start.disabled = !playing || (G.waveActive && !canCallEarly()) || (!G.waveActive && G.wave >= lastWave());
   setText(els.speed, G.speed + '×');
   setText(els.pause, G.paused ? '▶' : '❚❚');
   els.mute.style.textDecoration = SFX.muted ? 'line-through' : '';
   els.mute.style.opacity = SFX.muted ? '.55' : '1';
   els.retreat.disabled = mode !== 'play';
 
-  if (!G.waveActive && G.wave < WAVES && !G.over) {
+  if (!G.waveActive && G.wave < lastWave() && !G.over) {
     if (G.previewFor !== G.wave + 1) {
       const counts = {};
       buildWave(G.wave + 1).forEach(s => counts[s.type] = (counts[s.type] || 0) + 1);
@@ -2409,6 +2475,12 @@ function showCampaign() {
       <button data-act="newCampaign" title="Your stars and perks are kept">New campaign: scout new roads</button>
     </div>
     <p class="muted" style="margin:6px 0 0">Roads #${SAVE.seed.toString(36).toUpperCase()} · stars and perks carry over to a new campaign</p>
+    <h3>Daily Siege <span>${unlocked(1) ? `today's best: ${dailyBest()} waves · all-time: ${SAVE.bestEndless}` : 'win the first road to unlock'}</span></h3>
+    <button class="daily-card" data-act="brief" data-arg="${DAILY_INDEX}" ${unlocked(1) ? '' : 'disabled'}>
+      <img src="${THUMBS[DAILY_INDEX]}" alt="">
+      <div><strong>Endless waves on today's road</strong>
+        <small>${SEASONS[DAILY.season].label} · a new road every day, the same for every player. Survive as many waves as you can.</small></div>
+    </button>
     <h3>Royal Perks <span>★ ${avail} to spend · ${starsEarned()}/${LEVELS.length * 3} earned</span></h3>
     <div class="perks">${perks}</div>
     <div class="btn-row" style="margin-top:12px"><button data-act="resetPerks" ${starsSpent() ? '' : 'disabled'}>Refund all perks</button></div>
@@ -2416,14 +2488,14 @@ function showCampaign() {
 }
 
 function showBriefing(i) {
-  const l = LEVELS[i];
+  const l = levelAt(i);
   showOverlay(`
     <h2>${l.name}</h2>
-    <p class="muted">${SEASONS[l.season].label} · ${WAVES} waves · ${l.gold + 30 * perk('treasury')} starting gold</p>
+    <p class="muted">${SEASONS[l.season].label} · ${l.endless ? 'endless waves' : WAVES + ' waves'} · ${l.gold + 30 * perk('treasury')} starting gold</p>
     <img class="brief-img" src="${THUMBS[i]}" alt="">
     <p>${l.desc}</p>
     <p class="foes">${l.newFoes}</p>
-    <p class="muted">Your best: <span class="stars">${starsHtml(SAVE.stars[i])}</span></p>
+    <p class="muted">${l.endless ? `Today's best: ${dailyBest()} waves · all-time best: ${SAVE.bestEndless} waves` : `Your best: <span class="stars">${starsHtml(SAVE.stars[i])}</span>`}</p>
     <div class="btn-row">
       <button data-act="campaign">Back</button>
       <button class="primary" data-act="play" data-arg="${i}">Defend this road</button>
@@ -2432,7 +2504,7 @@ function showBriefing(i) {
 }
 
 function startLevel(i) {
-  LEVEL = LEVELS[i]; MAP = MAPS[i]; BG = BGS[i];
+  LEVEL = levelAt(i); MAP = MAPS[i]; BG = BGS[i];
   newGame();
   mode = 'play';
   ov.hidden = true;
@@ -2465,6 +2537,23 @@ function showVictory() {
 function showDefeat() {
   mode = 'result';
   SFX.play('lose');
+  if (LEVEL.endless) {
+    const held = G.cleared || 0, prevDay = dailyBest(), prevAll = SAVE.bestEndless;
+    if (held > prevDay) SAVE.daily = { seed: DAILY.seed, best: held };
+    if (held > prevAll) SAVE.bestEndless = held;
+    writeSave();
+    showOverlay(`
+      <h2>The siege broke through</h2>
+      <p>You held ${held} wave${held === 1 ? '' : 's'} on today's road.</p>
+      <div class="big-stars stars">${held}</div>
+      <p class="muted">${held > prevDay ? 'New best for today!' : `Today's best: ${prevDay} waves.`} All-time best: ${SAVE.bestEndless} waves.</p>
+      <div class="btn-row">
+        <button data-act="campaign">Campaign map</button>
+        <button class="primary" data-act="play" data-arg="${DAILY_INDEX}">Try again</button>
+      </div>
+    `);
+    return;
+  }
   showOverlay(`
     <h2>The castle has fallen</h2>
     <p>The monsters broke through ${LEVEL.name} on wave ${G.wave} of ${WAVES}.</p>
@@ -2484,12 +2573,25 @@ function toCanvas(e) {
   return { x: (e.clientX - rect.left) * W / rect.width, y: (e.clientY - rect.top) * H / rect.height };
 }
 cvs.addEventListener('mousemove', e => { mouse = toCanvas(e); });
+// On touch screens there is no hover, so the first tap previews (range, road spot) and a second tap confirms.
+let lastPointer = 'mouse', pendingTap = null;
+window.addEventListener('pointerdown', e => { lastPointer = e.pointerType; }, true);
+function needsConfirm(p) {
+  if (lastPointer !== 'touch' || !(placing || aiming)) { pendingTap = null; return false; }
+  const same = pendingTap && (aiming ? Math.hypot(pendingTap.x - p.x, pendingTap.y - p.y) < 28
+    : Math.floor(pendingTap.x / TILE) === Math.floor(p.x / TILE) && Math.floor(pendingTap.y / TILE) === Math.floor(p.y / TILE));
+  if (same) { pendingTap = null; return false; }
+  pendingTap = p; mouse = p;
+  return true;
+}
 cvs.addEventListener('mouseleave', () => { mouse = null; });
 cvs.addEventListener('click', e => {
   if (mode !== 'play' || G.over) return;
   const p = toCanvas(e);
   const c = Math.floor(p.x / TILE), r = Math.floor(p.y / TILE);
   const existing = towerAt(c, r);
+  if (lastPointer === 'touch') mouse = p;
+  if (needsConfirm(p) && !(placing && existing)) return;
   if (aiming) {
     if (castPower(aiming, p.x, p.y)) aiming = null;
     return;
