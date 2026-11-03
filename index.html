@@ -228,6 +228,7 @@
       <button id="startBtn" class="primary">Start Wave</button>
       <button id="speedBtn" title="Game speed">1×</button>
       <button id="pauseBtn" title="Pause (P)">❚❚</button>
+      <button id="muteBtn" title="Sound on/off (M)">♪</button>
     </div>
     <div id="nextWave"></div>
     <button id="retreatBtn">Retreat to campaign map</button>
@@ -236,7 +237,7 @@
       <kbd>1</kbd><kbd>2</kbd><kbd>3</kbd> pick a weapon · click the light grass to place it<br>
       <kbd>Shift</kbd>+click places several · <kbd>Esc</kbd>/right-click cancels<br>
       Click a weapon to upgrade or sell it (<kbd>U</kbd> upgrades)<br>
-      <kbd>Space</kbd> starts a wave, or calls the next one early for bonus gold · <kbd>P</kbd> pauses
+      <kbd>Space</kbd> starts a wave, or calls the next one early for bonus gold · <kbd>P</kbd> pauses · <kbd>M</kbd> sound
     </p>
   </aside>
 </div>
@@ -249,9 +250,10 @@
 // ---------------------------------------------------------------------------
 const TILE = 40, COLS = 16, ROWS = 24;
 const W = COLS * TILE, H = ROWS * TILE;
-const WAVES = 10;
-const AUTO_WAVE_DELAY = 8;   // seconds between clearing a wave and the next one starting by itself
-const EARLY_GOLD_PER_SEC = 2; // bonus for starting the next wave before the countdown ends
+const WAVES = 8;
+const AUTO_WAVE_DELAY = 5;   // seconds between clearing a wave and the next one starting by itself
+const EARLY_GOLD_PER_SEC = 3; // bonus for starting the next wave before the countdown ends
+const RES = Math.min(2, Math.max(1, window.devicePixelRatio || 1)); // canvas pixels per game pixel
 const BASE_CASTLE_HP = 20;
 const SAVE_KEY = 'hand-of-the-king-v1';
 
@@ -329,28 +331,28 @@ const LEVELS = [
 
 const TOWERS = {
   archer: {
-    name: 'Archer Tower', cost: 50, range: 130, damage: 10, rate: 0.55, air: true, perk: 'arrows',
-    proj: 'arrow', desc: 'Fast shots at a single target. Hits flyers.',
+    name: 'Archer Tower', cost: 60, range: 130, damage: 8, rate: 0.6, air: true, perk: 'arrows',
+    proj: 'arrow', desc: 'Fast shots at one target. Hits flyers. Weak against armor.',
   },
   catapult: {
-    name: 'Catapult', cost: 110, range: 165, damage: 30, rate: 2.2, splash: 55, air: false, perk: 'stones',
-    proj: 'rock', desc: 'Heavy stones that hit an area. Ground only.',
+    name: 'Catapult', cost: 100, range: 165, damage: 34, rate: 2.0, splash: 60, air: false, perk: 'stones',
+    proj: 'rock', desc: 'Heavy stones that crush groups and armor. Ground only.',
   },
   mage: {
-    name: 'Frost Mage', cost: 80, range: 110, damage: 5, rate: 0.9, slow: 0.45, slowDur: 1.6, air: true, perk: 'frost',
-    proj: 'frost', desc: 'Weak bolts that slow monsters. Hits flyers.',
+    name: 'Frost Mage', cost: 70, range: 115, damage: 7, rate: 0.9, slow: 0.5, slowDur: 2.0, air: true, perk: 'frost',
+    proj: 'frost', desc: 'Slows monsters. Chilled monsters take +25% damage from everything. Hits flyers.',
   },
 };
 const MAX_LEVEL = 3;
 
 const MONSTERS = {
-  goblin: { name: 'Goblin', plural: 'Goblins', hp: 28,  speed: 62, reward: 4,  dmg: 1, r: 9,  color: '#7cc444' },
-  wolf:   { name: 'Wolf',   plural: 'Wolves',  hp: 40,  speed: 95, reward: 6,  dmg: 1, r: 10, color: '#8d8d93' },
-  orc:    { name: 'Orc',    plural: 'Orcs',    hp: 75,  speed: 42, reward: 8,  dmg: 2, r: 12, color: '#56782b' },
-  troll:  { name: 'Troll',  plural: 'Trolls',  hp: 260, speed: 26, reward: 20, dmg: 4, r: 16, color: '#7d6fa0' },
-  knight: { name: 'Armored Knight', plural: 'Armored Knights', hp: 110, speed: 34, reward: 12, dmg: 3, r: 12, color: '#9aa3ad', armor: 7 },
-  bat:    { name: 'Bat',    plural: 'Bats',    hp: 32,  speed: 78, reward: 6,  dmg: 1, r: 9,  color: '#4b3a5c', fly: true },
-  ogre:   { name: 'Ogre Warlord', plural: 'Ogre Warlords', hp: 1100, speed: 20, reward: 80, dmg: 10, r: 22, color: '#a8583a', boss: true },
+  goblin: { name: 'Goblin', plural: 'Goblins', hp: 28,  speed: 62, reward: 4,  dmg: 1, r: 12, color: '#7cc444' },
+  wolf:   { name: 'Wolf',   plural: 'Wolves',  hp: 40,  speed: 95, reward: 6,  dmg: 1, r: 13, color: '#8d8d93' },
+  orc:    { name: 'Orc',    plural: 'Orcs',    hp: 75,  speed: 42, reward: 8,  dmg: 2, r: 15, color: '#56782b' },
+  troll:  { name: 'Troll',  plural: 'Trolls',  hp: 260, speed: 26, reward: 20, dmg: 4, r: 20, color: '#7d6fa0' },
+  knight: { name: 'Armored Knight', plural: 'Armored Knights', hp: 110, speed: 34, reward: 12, dmg: 3, r: 15, color: '#9aa3ad', armor: 7 },
+  bat:    { name: 'Bat',    plural: 'Bats',    hp: 32,  speed: 78, reward: 6,  dmg: 1, r: 12, color: '#4b3a5c', fly: true },
+  ogre:   { name: 'Ogre Warlord', plural: 'Ogre Warlords', hp: 1100, speed: 20, reward: 80, dmg: 10, r: 28, color: '#a8583a', boss: true },
 };
 
 const PERKS = [
@@ -364,8 +366,10 @@ const PERK_MAX = 3;
 
 // Roads with better build spots get tougher monsters, so random roads stay fair.
 const REF_POWER = 350;
+// Waves are numbered 1..WAVES; `e` maps them onto the original 10-wave difficulty curve.
+const effWave = n => n * 10 / WAVES;
 function hpScale(n) {
-  const k = n - 1;
+  const k = effWave(n) - 1;
   const roadMul = Math.min(1.2, Math.max(0.8, (MAP.power / REF_POWER) ** 1.5));
   return (1 + 0.2 * k + 0.015 * k * k) * LEVEL.diff * roadMul;
 }
@@ -373,20 +377,22 @@ function hpScale(n) {
 function buildWave(n, lvl = LEVEL) {
   const has = t => lvl.roster.includes(t);
   const groups = [];
-  const add = (type, count, gap) => { for (let i = 0; i < count; i++) groups.push({ type, gap }); };
-  add('goblin', 3 + n * 2, 0.8);
-  if (n >= 2) add('orc', Math.floor(n * 1.1), 1.1);
-  if (n >= 3 && has('wolf')) add('wolf', n - 1, 0.5);
-  if (n >= 4 && has('troll')) add('troll', Math.floor((n - 2) / 2), 2.0);
-  if (n >= 3 && has('knight')) add('knight', Math.floor(n * 0.6), 1.3);
-  if (n >= 2 && has('bat')) add('bat', n + 1, 0.45);
+  const e = effWave(n);
+  // Denser than before: shorter gaps between monsters keep the action going.
+  const add = (type, count, gap) => { for (let i = 0; i < count; i++) groups.push({ type, gap: gap * 0.75 }); };
+  add('goblin', Math.round(3 + e * 2), 0.8);
+  if (e >= 2) add('orc', Math.floor(e * 1.1), 1.1);
+  if (e >= 3 && has('wolf')) add('wolf', Math.floor(e - 1), 0.5);
+  if (e >= 4 && has('troll')) add('troll', Math.floor((e - 2) / 2), 2.0);
+  if (e >= 3 && has('knight')) add('knight', Math.floor(e * 0.6), 1.3);
+  if (e >= 2 && has('bat')) add('bat', Math.floor(e + 1), 0.45);
   // Shuffle the regular monsters, bosses always come last.
   const rnd = mulberry32(n * 977 + lvl.gold);
   for (let i = groups.length - 1; i > 0; i--) {
     const j = Math.floor(rnd() * (i + 1));
     [groups[i], groups[j]] = [groups[j], groups[i]];
   }
-  const bosses = n === WAVES ? lvl.finalBosses : (n === 5 && lvl.midBoss ? 1 : 0);
+  const bosses = n === WAVES ? lvl.finalBosses : (n === WAVES / 2 && lvl.midBoss ? 1 : 0);
   // The mid-campaign Warlord is a lesser one, so wave 5 isn't a wall.
   for (let i = 0; i < bosses; i++) groups.push({ type: 'ogre', gap: 3, hpMul: n === WAVES ? 1 : 0.6 });
   return groups;
@@ -406,7 +412,88 @@ function mulberry32(a) {
 const inGrid = (c, r) => c >= 0 && r >= 0 && c < COLS && r < ROWS;
 const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
 function circle(g, x, y, r) { g.beginPath(); g.arc(x, y, r, 0, Math.PI * 2); g.fill(); }
+// 3 stars: castle at 80%+ health, 2 stars: above half, 1 star: any win.
+const starsFor = (hp, max) => hp >= max * 0.8 ? 3 : hp > max / 2 ? 2 : 1;
 const starsHtml = n => '★'.repeat(n) + `<span class="off">${'★'.repeat(3 - n)}</span>`;
+
+// ---------------------------------------------------------------------------
+// Sound: small synthesized effects through Web Audio, no files needed.
+// ---------------------------------------------------------------------------
+const SFX = (() => {
+  let ac = null, master = null, noiseBuf = null, muted = false;
+  try { muted = localStorage.getItem('hand-of-the-king-mute') === '1'; } catch (e) { /* storage unavailable */ }
+  const last = {};
+  function ensure() {
+    if (!ac) {
+      const AC = window.AudioContext || window.webkitAudioContext;
+      if (!AC) return false;
+      ac = new AC();
+      master = ac.createGain(); master.gain.value = 0.32; master.connect(ac.destination);
+      noiseBuf = ac.createBuffer(1, ac.sampleRate, ac.sampleRate);
+      const d = noiseBuf.getChannelData(0);
+      for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+    }
+    if (ac.state === 'suspended') ac.resume();
+    return true;
+  }
+  function env(vol, t0, dur) {
+    const g = ac.createGain();
+    g.gain.setValueAtTime(0.0001, t0);
+    g.gain.exponentialRampToValueAtTime(vol, t0 + 0.008);
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+    g.connect(master);
+    return g;
+  }
+  function tone({ type = 'square', f = 440, f2 = 0, dur = 0.1, vol = 0.2, delay = 0 }) {
+    const t0 = ac.currentTime + delay, o = ac.createOscillator();
+    o.type = type; o.frequency.setValueAtTime(f, t0);
+    if (f2) o.frequency.exponentialRampToValueAtTime(f2, t0 + dur);
+    o.connect(env(vol, t0, dur)); o.start(t0); o.stop(t0 + dur + 0.02);
+  }
+  function noise({ dur = 0.15, vol = 0.2, freq = 1200, q = 1, kind = 'lowpass', delay = 0 }) {
+    const t0 = ac.currentTime + delay, src = ac.createBufferSource(), f = ac.createBiquadFilter();
+    src.buffer = noiseBuf; f.type = kind; f.frequency.value = freq; f.Q.value = q;
+    src.connect(f); f.connect(env(vol, t0, dur)); src.start(t0); src.stop(t0 + dur + 0.02);
+  }
+  const defs = {
+    arrow: () => noise({ dur: 0.06, vol: 0.10, freq: 3200, q: 3, kind: 'bandpass' }),
+    throw: () => tone({ type: 'triangle', f: 160, f2: 90, dur: 0.12, vol: 0.12 }),
+    thud: () => { noise({ dur: 0.22, vol: 0.28, freq: 380 }); tone({ type: 'sine', f: 95, f2: 45, dur: 0.22, vol: 0.3 }); },
+    frost: () => tone({ type: 'sine', f: 1500, f2: 900, dur: 0.12, vol: 0.06 }),
+    clink: () => tone({ type: 'square', f: 2400, f2: 1900, dur: 0.05, vol: 0.05 }),
+    die: () => tone({ type: 'sawtooth', f: 260, f2: 70, dur: 0.13, vol: 0.07 }),
+    coin: () => { tone({ type: 'square', f: 988, dur: 0.05, vol: 0.04 }); tone({ type: 'square', f: 1319, dur: 0.09, vol: 0.04, delay: 0.05 }); },
+    build: () => { noise({ dur: 0.12, vol: 0.22, freq: 700 }); tone({ type: 'triangle', f: 220, f2: 330, dur: 0.1, vol: 0.12 }); },
+    upgrade: () => [523, 659, 784].forEach((f, i) => tone({ type: 'triangle', f, dur: 0.14, vol: 0.13, delay: i * 0.07 })),
+    sell: () => tone({ type: 'triangle', f: 660, f2: 330, dur: 0.15, vol: 0.1 }),
+    castle: () => { noise({ dur: 0.4, vol: 0.45, freq: 260 }); tone({ type: 'sawtooth', f: 110, f2: 50, dur: 0.35, vol: 0.18 }); },
+    horn: () => { tone({ type: 'sawtooth', f: 196, dur: 0.55, vol: 0.09 }); tone({ type: 'sawtooth', f: 294, dur: 0.55, vol: 0.06, delay: 0.04 }); },
+    boss: () => { tone({ type: 'sine', f: 70, f2: 50, dur: 1.6, vol: 0.45 }); noise({ dur: 1.2, vol: 0.12, freq: 180 }); },
+    volley: () => { for (let i = 0; i < 6; i++) noise({ dur: 0.08, vol: 0.12, freq: 2600 + i * 200, q: 3, kind: 'bandpass', delay: i * 0.05 }); },
+    march: () => { for (let i = 0; i < 4; i++) noise({ dur: 0.07, vol: 0.2, freq: 500, delay: i * 0.12 }); tone({ type: 'square', f: 392, dur: 0.18, vol: 0.06 }); },
+    heal: () => tone({ type: 'sine', f: 520, f2: 880, dur: 0.25, vol: 0.05 }),
+    caw: () => { tone({ type: 'sawtooth', f: 900, f2: 500, dur: 0.12, vol: 0.05 }); },
+    win: () => [523, 659, 784, 1047].forEach((f, i) => tone({ type: 'triangle', f, dur: 0.35, vol: 0.15, delay: i * 0.13 })),
+    lose: () => [392, 330, 262, 196].forEach((f, i) => tone({ type: 'sawtooth', f, dur: 0.4, vol: 0.08, delay: i * 0.18 })),
+    click: () => tone({ type: 'triangle', f: 880, dur: 0.04, vol: 0.05 }),
+    error: () => tone({ type: 'square', f: 160, dur: 0.12, vol: 0.06 }),
+  };
+  return {
+    play(name, gap = 0.05) {
+      if (muted || !ensure()) return;
+      const now = ac.currentTime;
+      if (last[name] !== undefined && now - last[name] < gap) return;
+      last[name] = now;
+      try { defs[name](); } catch (e) { /* audio hiccup: ignore */ }
+    },
+    toggle() {
+      muted = !muted;
+      try { localStorage.setItem('hand-of-the-king-mute', muted ? '1' : '0'); } catch (e) { /* storage unavailable */ }
+      return muted;
+    },
+    get muted() { return muted; },
+  };
+})();
 
 // ---------------------------------------------------------------------------
 // Save data (stars per map, perk ranks)
@@ -556,8 +643,14 @@ function pointAt(d, map = MAP) {
 // Background rendering
 // ---------------------------------------------------------------------------
 const cvs = document.getElementById('c');
+cvs.width = W * RES; cvs.height = H * RES;
 const ctx = cvs.getContext('2d');
-const makeLayer = (w = W, h = H) => { const l = document.createElement('canvas'); l.width = w; l.height = h; return l; };
+// Offscreen layers are drawn in game pixels but stored at RES so they stay sharp on high-DPI screens.
+const makeLayer = (w = W, h = H, res = RES) => {
+  const l = document.createElement('canvas'); l.width = w * res; l.height = h * res;
+  l.getContext('2d').setTransform(res, 0, 0, res, 0, 0);
+  return l;
+};
 const decal = makeLayer(), fog = makeLayer();
 const dctx = decal.getContext('2d');
 
@@ -888,7 +981,7 @@ function buildCampaign() {
   MAPS = LEVELS.map((lvl, i) => buildMap(lvl, i, generateRoad(lvl.road, mulberry32(SAVE.seed * 31 + i * 7919))));
   BGS = MAPS.map(renderMap);
   THUMBS = BGS.map(bgc => {
-    const t = makeLayer(240, 360), g = t.getContext('2d');
+    const t = makeLayer(240, 360, 1), g = t.getContext('2d');
     g.drawImage(bgc, 0, 0, 240, 360); g.drawImage(fog, 0, 0, 240, 360);
     return t.toDataURL('image/jpeg', 0.85);
   });
@@ -906,6 +999,7 @@ let placing = null;   // tower type being placed
 let selected = null;  // selected tower object
 let mouse = null;     // {x, y} in canvas space
 let nextTowerId = 1;
+let gameSpeed = 1;    // remembered between roads
 
 function newGame() {
   const maxHp = BASE_CASTLE_HP + 3 * perk('walls');
@@ -913,7 +1007,7 @@ function newGame() {
     gold: LEVEL.gold + 30 * perk('treasury'), hp: maxHp, maxHp, wave: 0, waveActive: false, pendingBonus: 0, nextIn: 0,
     spawnQ: [], spawnT: 0,
     monsters: [], towers: [], projs: [], parts: [], texts: [],
-    speed: 1, paused: false, over: false,
+    speed: gameSpeed, paused: false, over: false,
     shake: 0, castleFlash: 0, time: 0, banner: null,
   };
   placing = null; selected = null;
@@ -951,6 +1045,7 @@ function placeTower(type, c, r) {
   };
   G.towers.push(t);
   puff(t.x, t.y, '#c9b38a', 12);
+  SFX.play('build');
   return true;
 }
 
@@ -961,6 +1056,7 @@ function upgradeTower(t) {
   G.gold -= cost; t.spent += cost; t.level++;
   puff(t.x, t.y, '#e8b84a', 16);
   floatText(t.x, t.y - 20, 'Level ' + t.level, '#e8b84a');
+  SFX.play('upgrade');
 }
 
 function sellTower(t) {
@@ -970,6 +1066,7 @@ function sellTower(t) {
   G.towers = G.towers.filter(x => x !== t);
   floatText(t.x, t.y - 10, '+' + v, '#e8b84a');
   puff(t.x, t.y, '#888', 12);
+  SFX.play('sell');
   if (selected === t) selected = null;
 }
 
@@ -995,6 +1092,7 @@ function startWave() {
   if (boss) text += ' — a Warlord approaches!';
   if (early) text = `Called early! +${early} bonus gold`;
   G.banner = { text, t: 2.4 };
+  SFX.play(boss ? 'boss' : 'horn');
 }
 
 function spawn(type, hpMul = 1) {
@@ -1012,20 +1110,24 @@ function spawn(type, hpMul = 1) {
 
 function damage(m, amt, tower) {
   if (m.dead) return;
+  if (m.slowT > 0) amt *= 1.25; // chilled monsters are brittle
   const armor = MONSTERS[m.type].armor || 0;
   let dealt = amt;
   if (armor) {
     dealt = Math.max(amt * 0.2, amt - armor);
     if (dealt < amt * 0.6) {
       for (let i = 0; i < 3; i++) G.parts.push({ x: m.x, y: m.y, vx: (Math.random() - .5) * 120, vy: (Math.random() - .5) * 120, life: 0.2, max: 0.2, color: '#fff6c0', size: 1.4 });
+      SFX.play('clink', 0.08);
     }
   }
+  if (dealt >= 40) floatText(m.x + (Math.random() - .5) * 10, m.y - 4, Math.round(dealt), '#ffffff', 0.6);
   m.hp -= dealt; m.flash = 0.08;
   if (m.hp <= 0) {
     m.dead = true;
     G.gold += m.reward;
     if (tower) tower.kills++;
     floatText(m.x, m.y - 12, '+' + m.reward, '#e8b84a');
+    SFX.play('die', 0.06);
     const mr = MONSTERS[m.type].r;
     puff(m.x, m.y, MON_ART[m.type].base, 10);
     puff(m.x, m.y, '#7a0a0a', 8);
@@ -1043,6 +1145,7 @@ function castleHit(m) {
   G.hp -= MONSTERS[m.type].dmg;
   G.shake = 0.3; G.castleFlash = 0.35;
   puff(m.x, m.y, '#d9543f', 10);
+  SFX.play('castle', 0.1);
   if (G.hp <= 0) {
     G.hp = 0; G.over = true;
     const g = G;
@@ -1054,6 +1157,7 @@ function waveDone() {
   G.waveActive = false;
   G.gold += G.pendingBonus;
   G.banner = { text: `Wave cleared  +${G.pendingBonus} gold`, t: 2 };
+  SFX.play('coin');
   G.pendingBonus = 0;
   if (G.wave < WAVES) G.nextIn = AUTO_WAVE_DELAY;
   if (G.wave >= WAVES) {
@@ -1073,7 +1177,7 @@ function puff(x, y, color, n) {
     G.parts.push({ x, y, vx: Math.cos(a) * s, vy: Math.sin(a) * s, life: 0.5 + Math.random() * 0.3, max: 0.8, color, size: 1.5 + Math.random() * 2.5 });
   }
 }
-function floatText(x, y, text, color) { G.texts.push({ x, y, text, color, life: 1.1 }); }
+function floatText(x, y, text, color, life = 1.1) { G.texts.push({ x, y, text, color, life }); }
 
 // ---------------------------------------------------------------------------
 // Update
@@ -1101,6 +1205,7 @@ function fire(t, m, s) {
     });
   }
   t.anim = 1;
+  SFX.play(kind === 'arrow' ? 'arrow' : kind === 'rock' ? 'throw' : 'frost', 0.07);
 }
 
 function update(dt) {
@@ -1165,6 +1270,7 @@ function update(dt) {
           if (d <= p.splash) damage(m, p.dmg * (1 - 0.5 * d / p.splash), p.tower);
         }
         puff(p.x, p.y, '#a58a63', 16);
+        SFX.play('thud', 0.08);
         dctx.fillStyle = 'rgba(60,40,20,.18)'; circle(dctx, p.x, p.y, 9);
       }
       continue;
@@ -1622,10 +1728,11 @@ function drawFlag() {
 
 function draw() {
   const C = MAP.castle;
+  ctx.setTransform(RES, 0, 0, RES, 0, 0);
   ctx.save();
   if (G.shake > 0) ctx.translate((Math.random() - .5) * 20 * G.shake, (Math.random() - .5) * 20 * G.shake);
-  ctx.drawImage(BG, 0, 0);
-  ctx.drawImage(decal, 0, 0);
+  ctx.drawImage(BG, 0, 0, W, H);
+  ctx.drawImage(decal, 0, 0, W, H);
 
   if (placing) {
     ctx.strokeStyle = 'rgba(255,255,255,.14)'; ctx.lineWidth = 1;
@@ -1660,7 +1767,7 @@ function draw() {
   }
   ctx.globalAlpha = 1;
 
-  ctx.drawImage(fog, 0, 0);
+  ctx.drawImage(fog, 0, 0, W, H);
   drawPortal();
 
   if (placing && mouse) {
@@ -1705,7 +1812,7 @@ function draw() {
 const $ = id => document.getElementById(id);
 const els = {
   gold: $('gold'), hp: $('hp'), wave: $('wave'), info: $('info'), start: $('startBtn'),
-  speed: $('speedBtn'), pause: $('pauseBtn'), next: $('nextWave'), mapName: $('mapName'), retreat: $('retreatBtn'),
+  speed: $('speedBtn'), pause: $('pauseBtn'), mute: $('muteBtn'), next: $('nextWave'), mapName: $('mapName'), retreat: $('retreatBtn'),
 };
 const setText = (el, v) => { v = String(v); if (el.textContent !== v) el.textContent = v; };
 const shopButtons = {};
@@ -1776,7 +1883,7 @@ function renderInfo() {
   } else {
     els.info.innerHTML = `
       <p>Choose a weapon from the armory and place it on the light grass along the road.</p>
-      <p>Weapons fire on their own at the monster furthest along the road. Keep the castle unharmed for <span style="color:var(--gold)">★★★</span>.</p>`;
+      <p>Weapons fire on their own at the monster furthest along the road. Keep 80% of the castle's health for <span style="color:var(--gold)">★★★</span>.</p>`;
   }
 }
 
@@ -1807,12 +1914,18 @@ function syncUI() {
   els.start.disabled = !playing || (G.waveActive && !canCallEarly()) || (!G.waveActive && G.wave >= WAVES);
   setText(els.speed, G.speed + '×');
   setText(els.pause, G.paused ? '▶' : '❚❚');
+  els.mute.style.textDecoration = SFX.muted ? 'line-through' : '';
+  els.mute.style.opacity = SFX.muted ? '.55' : '1';
   els.retreat.disabled = mode !== 'play';
 
   if (!G.waveActive && G.wave < WAVES && !G.over) {
-    const counts = {};
-    buildWave(G.wave + 1).forEach(s => counts[s.type] = (counts[s.type] || 0) + 1);
-    setText(els.next, 'Next: ' + Object.entries(counts).map(([t, n]) => `${n} ${n === 1 ? MONSTERS[t].name : MONSTERS[t].plural}`).join(', '));
+    if (G.previewFor !== G.wave + 1) {
+      const counts = {};
+      buildWave(G.wave + 1).forEach(s => counts[s.type] = (counts[s.type] || 0) + 1);
+      G.previewFor = G.wave + 1;
+      G.preview = 'Next: ' + Object.entries(counts).map(([t, n]) => `${n} ${n === 1 ? MONSTERS[t].name : MONSTERS[t].plural}`).join(', ');
+    }
+    setText(els.next, G.preview);
   } else {
     const left = G.spawnQ.length + G.monsters.length;
     setText(els.next, G.over ? '' : `Monsters remaining: ${left}`);
@@ -1820,8 +1933,9 @@ function syncUI() {
 }
 
 els.start.onclick = startWave;
-els.speed.onclick = () => { G.speed = G.speed >= 3 ? 1 : G.speed + 1; };
+els.speed.onclick = () => { G.speed = gameSpeed = G.speed >= 3 ? 1 : G.speed + 1; };
 els.pause.onclick = () => { if (mode === 'play') G.paused = !G.paused; };
+els.mute.onclick = () => { SFX.toggle(); SFX.play('click'); };
 let retreatArmed = 0;
 els.retreat.onclick = () => {
   if (mode !== 'play') return;
@@ -1887,7 +2001,7 @@ function showCampaign() {
   showOverlay(`
     <h2>The King's Campaign</h2>
     <p class="muted">Monsters are pouring out of the void. As Hand of the King you must hold each road to the castle for ${WAVES} waves.
-      Win a road to unlock the next. Earn up to 3 stars per road (3 if the castle takes no damage) and spend them on permanent perks.</p>
+      Win a road to unlock the next. Earn up to 3 stars per road (3 if the castle keeps 80% of its health) and spend them on permanent perks.</p>
     <div class="maps">${cards}</div>
     <div class="btn-row" style="margin-top:12px">
       <button data-act="newCampaign" title="Your stars and perks are kept">New campaign: scout new roads</button>
@@ -1926,7 +2040,8 @@ function startLevel(i) {
 function showVictory() {
   mode = 'result';
   const i = MAP.index;
-  const stars = G.hp >= G.maxHp ? 3 : G.hp > G.maxHp / 2 ? 2 : 1;
+  const stars = starsFor(G.hp, G.maxHp);
+  SFX.play('win');
   const prev = SAVE.stars[i];
   const gain = Math.max(0, stars - prev);
   if (gain) { SAVE.stars[i] = stars; writeSave(); }
@@ -1947,6 +2062,7 @@ function showVictory() {
 
 function showDefeat() {
   mode = 'result';
+  SFX.play('lose');
   showOverlay(`
     <h2>The castle has fallen</h2>
     <p>The monsters broke through ${LEVEL.name} on wave ${G.wave} of ${WAVES}.</p>
@@ -1981,6 +2097,7 @@ cvs.addEventListener('click', e => {
 });
 cvs.addEventListener('contextmenu', e => { e.preventDefault(); placing = null; selected = null; });
 window.addEventListener('keydown', e => {
+  if (e.key === 'm' || e.key === 'M') { SFX.toggle(); SFX.play('click'); return; }
   if (mode !== 'play') return;
   const keys = Object.keys(TOWERS);
   if (e.key >= '1' && e.key <= String(keys.length)) togglePlacing(keys[+e.key - 1]);
