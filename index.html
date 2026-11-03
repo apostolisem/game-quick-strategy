@@ -379,28 +379,28 @@ const SEASONS = {
 const LEVELS = [
   {
     name: 'Greenwood Pass', season: 'summer', gold: 160, diff: 1.0, pads: 12,
-    road: { runs: [2, 3], horiz: [14, 24] },
+    road: { runs: [2, 3], horiz: [14, 24], pockets: 1, wobble: 0.6, twist: 1 },
     roster: ['goblin', 'wolf', 'orc'], midBoss: false, finalBosses: 1,
     desc: 'A quiet summer road through the Greenwood. Goblins, wolves and orcs are testing the King\'s defences. A good place to learn the ropes.',
     newFoes: 'Goblins, Wolves and Orcs. An Ogre Warlord leads the final wave.',
   },
   {
     name: 'Amberleaf Hollow', season: 'autumn', gold: 190, diff: 1.45, pads: 12,
-    road: { runs: [3, 3], horiz: [20, 30] },
+    road: { runs: [3, 3], horiz: [20, 30], pockets: 1, wobble: 1, twist: 1 },
     roster: ['goblin', 'wolf', 'orc', 'troll', 'knight', 'shaman'], midBoss: true, finalBosses: 1,
     desc: 'Falling leaves hide the road as it winds through the hollow. The enemy has brought heavier troops.',
     newFoes: '<b>Armored Knights</b>: their armor blocks part of every hit, so weak, fast shots barely scratch them. Catapults and Longbows punch through. <b>Trolls</b> are slow but very tough. <b>Goblin Shamans</b> heal everything around them: aim at them first.',
   },
   {
-    name: 'Frostpine Ridge', season: 'winter', gold: 230, diff: 1.5, pads: 14,
-    road: { runs: [4, 4], horiz: [34, 46], wide: true },
+    name: 'Frostpine Ridge', season: 'winter', gold: 230, diff: 1.45, pads: 14,
+    road: { runs: [4, 4], horiz: [34, 46], wide: true, pockets: 2, wobble: 0.8, twist: 0.8 },
     roster: ['goblin', 'wolf', 'orc', 'troll', 'knight', 'bat', 'shaman', 'raven'], midBoss: true, finalBosses: 2,
     desc: 'A long road that switches back and forth up the snowy ridge. More road means more time to shoot, and more monsters to shoot at.',
     newFoes: '<b>Bats</b> fly above the road. Catapult stones can\'t hit them, so keep Archers and Frost Mages ready. <b>Ravens</b> ignore the road and fly straight at the castle.',
   },
   {
-    name: 'Mirefen Crossing', season: 'swamp', gold: 270, diff: 1.7, pads: 10,
-    road: { runs: [2, 2], horiz: [8, 14] },
+    name: 'Mirefen Crossing', season: 'swamp', gold: 270, diff: 1.55, pads: 10,
+    road: { runs: [2, 2], horiz: [10, 16], pockets: 2, wobble: 1.45, twist: 1.5 },
     roster: ['goblin', 'wolf', 'orc', 'troll', 'knight', 'bat', 'shaman', 'raven'], midBoss: true, finalBosses: 2,
     desc: 'A short road across the bog leaves little room for error. Every kind of monster attacks here, and two Warlords lead the final wave.',
     newFoes: 'Everything at once. Plan your kill zone carefully: the road is short.',
@@ -413,7 +413,7 @@ const DAILY = (() => {
   const seed = dailySeed(), seasons = Object.keys(SEASONS);
   return {
     name: 'Daily Siege', season: seasons[seed % seasons.length], gold: 240, diff: 1.15, pads: 12,
-    road: { runs: [2, 4], horiz: [14, 34] }, endless: true, seed,
+    road: { runs: [2, 4], horiz: [14, 34], pockets: 2, wobble: 1, twist: 1 }, endless: true, seed,
     roster: ['goblin', 'wolf', 'orc', 'troll', 'knight', 'bat', 'shaman', 'raven'], midBoss: true, finalBosses: 1,
     desc: 'Endless waves on today\'s road. Everyone gets the same road today, so compare your best with friends.',
     newFoes: 'Every monster, getting stronger each wave. A Warlord arrives every 4 waves. How long can you hold?',
@@ -658,7 +658,7 @@ function generateRoad(spec, rnd) {
     const n = ri(spec.runs[0], spec.runs[1]);
     const rows = [];
     let r = ri(16, 20);
-    for (let i = 0; i < n; i++) { rows.push(r); r -= ri(3, 6); }
+    for (let i = 0; i < n; i++) { rows.push(r); r -= spec.pockets ? ri(4, 6) : ri(3, 6); }
     if (rows[n - 1] < 7) continue;
     const cols = [ri(2, 13)];
     let horiz = 0, ok = true;
@@ -686,6 +686,8 @@ function generateRoad(spec, rnd) {
 // ---------------------------------------------------------------------------
 const PAD = 4;
 function buildMap(lvl, index, wp, seed) {
+  wp = wp.map(p => p.slice());
+  const pocketSpots = addPockets(wp, lvl.road.pockets || 0, mulberry32(seed + 5));
   const grid = [...Array(ROWS)].map(() => Array(COLS).fill(0));
   for (let i = 0; i < wp.length - 1; i++) {
     const [c0, r0] = wp[i], [c1, r1] = wp[i + 1];
@@ -716,30 +718,76 @@ function buildMap(lvl, index, wp, seed) {
 
   const corners = wp.map(([c, r]) => ({ x: c * TILE + TILE / 2, y: r * TILE + TILE / 2 }));
   corners[corners.length - 1].y = castle.y + castle.h - 4; // stop at the gate
-  const pts = curvyRoad(corners, mulberry32(seed + 77));
-  // Tiles the wobbly road actually crosses count as road, so nothing is built on it.
-  for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) {
-    if (grid[r][c] === 3) continue;
-    const x = c * TILE + TILE / 2, y = r * TILE + TILE / 2;
-    if (pts.some(p => Math.abs(p.x - x) < 26 && Math.abs(p.y - y) < 26)) grid[r][c] = 2;
-  }
-  const segs = [];
-  let len = 0;
-  for (let i = 0; i < pts.length - 1; i++) {
-    const a = pts[i], b = pts[i + 1];
-    const l = Math.hypot(b.x - a.x, b.y - a.y);
-    segs.push({ a, b, len: l, start: len, ang: Math.atan2(b.y - a.y, b.x - a.x) });
-    len += l;
-  }
-  const map = { lvl, index, grid, pts, segs, len, castle };
-  choosePads(map, lvl.pads, mulberry32(seed));
+  const rnd = mulberry32(seed + 77);
+  const map = { lvl, index, grid, castle };
+  // Pads are chosen on the smoothly curved road, then the road wanders around them.
+  setRoad(map, roundCorners(corners, rnd));
+  choosePads(map, lvl.pads, mulberry32(seed), pocketSpots);
+  setRoad(map, wobbleRoad(map.pts, rnd, lvl.road, map.pads));
+  map.pockets = pocketSpots.filter(sp => grid[sp.r][sp.c] === PAD);
   map.power = roadPower(map);
   return map;
 }
 
-// Turns the grid road (straight runs, square corners) into a natural one: corners become
-// curves of random radius and the whole road wanders a little from side to side.
-function curvyRoad(corners, rnd) {
+function setRoad(map, pts) {
+  // Tiles the road actually crosses count as road, so nothing is built on it.
+  for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) {
+    const g = map.grid[r][c];
+    if (g === 3 || g === PAD) continue;
+    const x = c * TILE + TILE / 2, y = r * TILE + TILE / 2;
+    if (pts.some(p => Math.abs(p.x - x) < 26 && Math.abs(p.y - y) < 26)) map.grid[r][c] = 2;
+  }
+  const segs = [];
+  let len = 0;
+  for (let i = 0; i < pts.length - 1; i++) {
+    const a = pts[i], b = pts[i + 1], l = Math.hypot(b.x - a.x, b.y - a.y);
+    segs.push({ a, b, len: l, start: len, ang: Math.atan2(b.y - a.y, b.x - a.x) });
+    len += l;
+  }
+  Object.assign(map, { pts, segs, len });
+}
+
+// Pockets: hairpin bends carved into long sideways stretches of the grid road. The tile inside a
+// pocket has road on three sides, so a weapon there covers a lot of road: a prime spot to fight over.
+function addPockets(wp, count, rnd) {
+  const spots = [];
+  const roadTiles = () => {
+    const set = new Set();
+    for (let i = 0; i < wp.length - 1; i++) {
+      const [c0, r0] = wp[i], [c1, r1] = wp[i + 1], dc = Math.sign(c1 - c0), dr = Math.sign(r1 - r0);
+      for (let c = c0, r = r0; ; c += dc, r += dr) { set.add(c + ',' + r); if (c === c1 && r === r1) break; }
+    }
+    return set;
+  };
+  for (let tries = 0; tries < 30 && spots.length < count; tries++) {
+    const runs = [];
+    for (let i = 0; i < wp.length - 1; i++) if (wp[i][1] === wp[i + 1][1] && Math.abs(wp[i + 1][0] - wp[i][0]) >= 7) runs.push(i);
+    if (!runs.length) break;
+    const i = runs[Math.floor(rnd() * runs.length)];
+    const [c0, r] = wp[i], c1 = wp[i + 1][0], dx = Math.sign(c1 - c0), span = Math.abs(c1 - c0);
+    const w = rnd() < 0.5 ? 3 : 4;                       // width of the hairpin in tiles
+    const off = 2 + Math.floor(rnd() * (span - w - 3));  // keep 2 tiles of straight road at each end
+    const a = c0 + dx * off, b = a + dx * w;
+    const road = roadTiles();
+    const first = rnd() < 0.5 ? 1 : -1;
+    for (const d of [first, -first]) {
+      const depth = 2 + (rnd() < 0.5 ? 1 : 0), re = r + d * depth;
+      if (re < 6 || re > 20) continue;
+      let free = true; // the pocket and a one-tile margin around it must be empty
+      for (let k = 1; k <= depth + 2 && free; k++) for (let c = Math.min(a, b) - 1; c <= Math.max(a, b) + 1; c++) {
+        if (road.has(c + ',' + (r + d * k))) { free = false; break; }
+      }
+      if (!free) continue;
+      wp.splice(i + 1, 0, [a, r], [a, re], [b, re], [b, r]);
+      spots.push({ c: a + dx * Math.floor(w / 2), r: r + d * (depth >= 3 ? 1 + (rnd() < 0.5 ? 1 : 0) : 1) });
+      break;
+    }
+  }
+  return spots;
+}
+
+// Turns square grid corners into curves of random radius, sampled every 8px.
+function roundCorners(corners, rnd) {
   const rounded = [corners[0]];
   for (let i = 1; i < corners.length - 1; i++) {
     const a = corners[i - 1], b = corners[i], c = corners[i + 1];
@@ -753,29 +801,42 @@ function curvyRoad(corners, rnd) {
     }
   }
   rounded.push(corners[corners.length - 1]);
-  // Resample evenly, then push each point sideways by a few overlapping waves.
   const dense = [rounded[0]];
   for (let i = 1; i < rounded.length; i++) {
     const a = rounded[i - 1], b = rounded[i], l = Math.hypot(b.x - a.x, b.y - a.y);
     for (let d = 8; d < l; d += 8) dense.push({ x: a.x + (b.x - a.x) * d / l, y: a.y + (b.y - a.y) * d / l });
     dense.push(b);
   }
-  const waves = [[11, 95 + rnd() * 70], [4.5, 32 + rnd() * 16], [1.5, 12 + rnd() * 5]].map(([amp, len]) => ({ amp, len, ph: rnd() * 7 }));
+  return dense;
+}
+
+// Lets the road wander from side to side with a few overlapping waves. `style.wobble` scales how far,
+// `style.twist` how often. The road never wanders onto a build pad.
+function wobbleRoad(dense, rnd, style, pads) {
+  const A = style.wobble ?? 1, T = style.twist ?? 1;
+  const waves = [[11, 95 + rnd() * 70], [4.5, 32 + rnd() * 16], [1.5, 12 + rnd() * 5]]
+    .map(([amp, len]) => ({ amp: amp * A, len: len / T, ph: rnd() * 7 }));
   let s = 0;
   const lens = dense.map((p, i) => (s += i ? Math.hypot(p.x - dense[i - 1].x, p.y - dense[i - 1].y) : 0));
   const total = s;
+  const padXY = pads.map(p => ({ x: p.c * TILE + TILE / 2, y: p.r * TILE + TILE / 2 }));
   return dense.map((p, i) => {
     const a = dense[Math.max(0, i - 1)], b = dense[Math.min(dense.length - 1, i + 1)];
     const tl = Math.hypot(b.x - a.x, b.y - a.y) || 1, nx = -(b.y - a.y) / tl, ny = (b.x - a.x) / tl;
     const taper = Math.max(0, Math.min(1, lens[i] / 90, (total - lens[i] - 30) / 110)); // straight at the portal and the gate
     const off = waves.reduce((sum, w) => sum + w.amp * Math.sin(lens[i] / w.len + w.ph), 0) * taper;
-    return { x: p.x + nx * off, y: p.y + ny * off };
+    const q = { x: p.x + nx * off, y: p.y + ny * off };
+    for (const c of padXY) { // keep at least 40px from every pad centre
+      const dx = q.x - c.x, dy = q.y - c.y, d = Math.hypot(dx, dy);
+      if (d < 40 && d > 0.01) { q.x = c.x + dx / d * 40; q.y = c.y + dy / d * 40; }
+    }
+    return q;
   });
 }
 
 // Towers can only stand on a limited number of stone pads, so where to build is a real choice.
 // Pads favour tiles that see a lot of road (bends, switchbacks) with some randomness, and never touch each other.
-function choosePads(map, count, rnd) {
+function choosePads(map, count, rnd, prime = []) {
   const cands = [];
   for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) {
     if (map.grid[r][c] !== 1) continue;
@@ -790,6 +851,8 @@ function choosePads(map, count, rnd) {
     if (cov > 0) cands.push({ c, r, score: cov * (0.6 + 0.8 * rnd()) });
   }
   cands.sort((a, b) => b.score - a.score);
+  // The tile inside each pocket always gets a pad.
+  for (const sp of prime) { const k = cands.findIndex(c => c.c === sp.c && c.r === sp.r); if (k > 0) cands.unshift(cands.splice(k, 1)[0]); }
   const pads = [];
   for (const k of cands) {
     if (pads.length >= count) break;
@@ -1194,9 +1257,19 @@ function renderFog() {
 }
 
 let MAPS, BGS, THUMBS;
+// Rolls roads until one has room for all of the level's pockets (or gives up and keeps the best one).
+function makeMap(lvl, index, roadSeed, seed) {
+  let best = null;
+  for (let k = 0; k < 25; k++) {
+    const m = buildMap(lvl, index, generateRoad(lvl.road, mulberry32(roadSeed + k * 1013)), seed + k);
+    if (!best || m.pockets.length > best.pockets.length) best = m;
+    if (m.pockets.length >= (lvl.road.pockets || 0)) break;
+  }
+  return best;
+}
 function buildCampaign() {
-  MAPS = LEVELS.map((lvl, i) => buildMap(lvl, i, generateRoad(lvl.road, mulberry32(SAVE.seed * 31 + i * 7919)), SAVE.seed * 17 + i * 389));
-  MAPS.push(buildMap(DAILY, DAILY_INDEX, generateRoad(DAILY.road, mulberry32(DAILY.seed * 7)), DAILY.seed * 3));
+  MAPS = LEVELS.map((lvl, i) => makeMap(lvl, i, SAVE.seed * 31 + i * 7919, SAVE.seed * 17 + i * 389));
+  MAPS.push(makeMap(DAILY, DAILY_INDEX, DAILY.seed * 7, DAILY.seed * 3));
   BGS = MAPS.map(renderMap);
   THUMBS = BGS.map(bgc => {
     const t = makeLayer(240, 360, 1), g = t.getContext('2d');
