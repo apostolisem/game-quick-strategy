@@ -17,6 +17,10 @@
     --border: #5b4a2c;
   }
   * { box-sizing: border-box; }
+  /* Touch: no double-tap zoom, no text selection or grey tap flash while playing. */
+  html { touch-action: manipulation; -webkit-text-size-adjust: 100%; }
+  body { -webkit-user-select: none; user-select: none; -webkit-tap-highlight-color: transparent; -webkit-touch-callout: none; }
+  button { touch-action: manipulation; }
   body {
     margin: 0;
     background: radial-gradient(circle at 50% 0%, #22281a, var(--bg) 70%);
@@ -46,6 +50,24 @@
     cursor: crosshair;
     touch-action: manipulation;
   }
+  /* Pop-up menu next to a pad or tower: build, upgrade, target, sell. */
+  #menu {
+    position: absolute; z-index: 4; display: flex; gap: 6px; padding: 6px;
+    background: rgba(28,22,14,.94); border: 2px solid var(--gold); border-radius: 10px;
+    box-shadow: 0 8px 24px rgba(0,0,0,.6); max-width: calc(100% - 8px);
+  }
+  #menu[hidden] { display: none; }
+  #menu button {
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
+    min-width: 62px; min-height: 62px; padding: 4px 6px; font-size: 12px; line-height: 1.15; text-align: center;
+  }
+  #menu button canvas { width: 34px; height: 34px; }
+  #menu button b { font-size: 12px; }
+  #menu button .c { color: var(--gold); font-weight: bold; }
+  #menu button.picked { outline: 2px solid var(--accent); background: #3f4a26; }
+  #menu button.warn { background: #6a2418; border-color: var(--danger); }
+  #menu .tip { position: absolute; left: 0; right: 0; top: 100%; margin-top: 4px; text-align: center; font-size: 12px; color: var(--ink); text-shadow: 0 1px 2px #000, 0 0 6px #000; pointer-events: none; }
+  #menu.above .tip { top: auto; bottom: 100%; margin: 0 0 4px; }
   #panel {
     width: 290px;
     flex: none;
@@ -257,6 +279,7 @@
 <div id="game">
   <div id="stage">
     <canvas id="c" width="640" height="960"></canvas>
+    <div id="menu" hidden></div>
   </div>
 
   <aside id="panel">
@@ -288,7 +311,7 @@
     <button id="retreatBtn">Retreat to campaign map</button>
 
     <p class="help">
-      <kbd>1</kbd><kbd>2</kbd><kbd>3</kbd> pick a weapon · click a stone pad to build it<br>
+      Click a stone pad to build, or pick from the armory (<kbd>1</kbd><kbd>2</kbd><kbd>3</kbd>)<br>
       <kbd>Shift</kbd>+click places several · <kbd>Esc</kbd>/right-click cancels<br>
       <kbd>Q</kbd> Arrow Volley · <kbd>W</kbd> Reinforcements<br>
       Click a weapon to upgrade or sell it (<kbd>U</kbd> upgrades, <kbd>T</kbd> changes its target)<br>
@@ -1133,6 +1156,7 @@ let mode = 'campaign'; // 'campaign' | 'play' | 'result'
 let G = null;
 let placing = null;   // tower type being placed
 let aiming = null;    // King's Power waiting for a target
+let padMenu = null;   // {c, r, pick} while the build menu is open on a free pad
 let selected = null;  // selected tower object
 let mouse = null;     // {x, y} in canvas space
 let nextTowerId = 1;
@@ -1148,7 +1172,7 @@ function newGame() {
     speed: gameSpeed, paused: false, over: false,
     shake: 0, castleFlash: 0, time: 0, banner: null,
   };
-  placing = null; selected = null; aiming = null;
+  placing = null; selected = null; aiming = null; padMenu = null;
   dctx.clearRect(0, 0, W, H);
   infoKey = '';
 }
@@ -1349,7 +1373,7 @@ function roadPointNear(x, y, maxD = 36) {
 function togglePower(key) {
   if (mode !== 'play' || G.over || G.powerCd[key] > 0) { SFX.play('error', 0.2); return; }
   aiming = aiming === key ? null : key;
-  placing = null; selected = null;
+  placing = null; closeMenus();
 }
 
 function castPower(key, x, y) {
@@ -2159,6 +2183,15 @@ function draw() {
   ctx.fillRect(C.x, barY + 1, C.w * pct, 6);
 
   for (const t of G.towers) drawTower(ctx, t.type, t.x, t.y, t.ang, t.level, t.anim, G.time, t.branch);
+  if (padMenu) {
+    const x = padMenu.c * TILE + TILE / 2, y = padMenu.r * TILE + TILE / 2;
+    if (padMenu.pick) {
+      drawRange(x, y, TOWERS[padMenu.pick].range, G.gold >= TOWERS[padMenu.pick].cost);
+      ctx.globalAlpha = 0.7; drawTower(ctx, padMenu.pick, x, y, -Math.PI / 2, 1, 0, G.time); ctx.globalAlpha = 1;
+    }
+    ctx.strokeStyle = '#e8b84a'; ctx.lineWidth = 2.5;
+    ctx.beginPath(); ctx.arc(x, y, 20, 0, Math.PI * 2); ctx.stroke();
+  }
   if (selected) {
     drawRange(selected.x, selected.y, stats(selected).range, true);
     ctx.strokeStyle = '#e8b84a'; ctx.lineWidth = 2;
@@ -2217,6 +2250,13 @@ function draw() {
   }
   ctx.globalAlpha = 1;
 
+  if (aiming && mode === 'play' && !G.over) { // tell the player what to do next
+    const tap = lastPointer === 'touch' ? 'Tap' : 'Click';
+    const msg = aiming === 'volley' ? `${tap} where the arrows should fall` : `${tap} on the road to send footmen`;
+    ctx.font = 'bold 22px Georgia'; ctx.textAlign = 'center';
+    ctx.fillStyle = 'rgba(20,14,6,.8)'; ctx.fillRect(0, H - 214, W, 40);
+    ctx.fillStyle = '#e8b84a'; ctx.fillText(msg, W / 2, H - 186);
+  }
   const bannerText = mode === 'play' && G.paused ? 'Paused' : G.banner && G.banner.text;
   if (bannerText) {
     const a = G.paused ? 1 : Math.min(1, G.banner.t * 1.5);
@@ -2277,7 +2317,7 @@ function togglePlacing(key) {
   if (mode !== 'play' || G.over) return;
   if (G.gold < TOWERS[key].cost && placing !== key) return;
   placing = placing === key ? null : key;
-  selected = null; aiming = null;
+  aiming = null; closeMenus();
 }
 
 function fmtStats(s) {
@@ -2328,7 +2368,7 @@ function renderInfo() {
       <h3>${pw.name}</h3>
       <p>${pw.desc}</p>
       ${aiming === 'volley' ? `<table><tr><td>Damage</td><td>${volleyDamage()}</td></tr><tr><td>Radius</td><td>${POWERS.volley.radius}</td></tr></table>` : ''}
-      <p>${lastPointer === 'touch' ? 'Tap the map to aim, tap again to fire.' : 'Click the map to use it. Esc cancels.'} Cooldown ${pw.cd}s.</p>`;
+      <p>${lastPointer === 'touch' ? 'Tap the map to use it. Tap the power again to cancel.' : 'Click the map to use it. Esc cancels.'} Cooldown ${pw.cd}s.</p>`;
   } else if (placing) {
     const b = TOWERS[placing];
     const s = stats({ type: placing, level: 1 });
@@ -2336,10 +2376,10 @@ function renderInfo() {
       <h3>${b.name} · ${b.cost} gold</h3>
       <p>${b.desc}</p>
       <table>${fmtStats(s).map(r => `<tr><td>${r[0]}</td><td>${r[1]}</td></tr>`).join('')}</table>
-      <p>${lastPointer === 'touch' ? 'Tap a free stone pad to preview, tap it again to build.' : 'Click a free stone pad next to the road. Shift+click to place several.'}</p>`;
+      <p>${lastPointer === 'touch' ? 'Tap a free stone pad to build it there.' : 'Click a free stone pad next to the road. Shift+click to place several.'}</p>`;
   } else {
     els.info.innerHTML = `
-      <p>Choose a weapon from the armory and build it on one of the stone pads along the road. Pads are limited, so pick them well.</p>
+      <p>Click or tap a stone pad along the road to build a weapon there. Pads are limited, so pick them well.</p>
       <p>Weapons fire on their own. Click one to change which monster it aims at. Keep 80% of the castle's health for <span style="color:var(--gold)">★★★</span>.</p>`;
   }
 }
@@ -2361,11 +2401,12 @@ function syncUI() {
     pb.b.classList.toggle('ready', playing && ready);
     pb.b.classList.toggle('active', aiming === key);
     pb.fill.style.width = (ready ? 0 : 100 * cd / POWERS[key].cd) + '%';
-    setText(pb.label, aiming === key ? 'Click the map' : ready ? 'Ready' : Math.ceil(cd) + 's');
+    setText(pb.label, aiming === key ? (lastPointer === 'touch' ? 'Tap the map' : 'Click the map') : ready ? 'Ready' : Math.ceil(cd) + 's');
   }
   renderInfo();
-  els.panel.classList.toggle('show-info', !!(selected || placing || aiming));
+  els.panel.classList.toggle('show-info', !!(placing || aiming));
   els.panel.classList.toggle('brief-info', !selected && !!(placing || aiming));
+  syncMenu();
   if (selected) {
     const k = $('kills'); if (k) setText(k, selected.kills);
     const up = $('upBtn'); if (up) up.disabled = selected.level >= MAX_LEVEL || G.gold < upgradeCost(selected);
@@ -2566,6 +2607,98 @@ function showDefeat() {
 }
 
 // ---------------------------------------------------------------------------
+// Pop-up menu: tap a free pad to build, tap a tower to upgrade / aim / sell.
+// Works the same with mouse and touch; on touch the first tap on a weapon previews its range.
+// ---------------------------------------------------------------------------
+const menuEl = $('menu');
+let menuKey = '', sellArmed = 0, branchPick = null;
+const towerIcon = type => {
+  const ic = document.createElement('canvas'); ic.width = 68; ic.height = 68;
+  const g = ic.getContext('2d'); g.scale(1.5, 1.5);
+  drawTower(g, type, 22.6, 22, -Math.PI / 4, 1, 0, 0);
+  return ic;
+};
+function closeMenus() { padMenu = null; selected = null; sellArmed = 0; branchPick = null; }
+
+function menuButton(html, onPick, cls = '') {
+  const b = document.createElement('button');
+  b.innerHTML = html; if (cls) b.className = cls;
+  b.addEventListener('click', e => { e.stopPropagation(); onPick(b); });
+  return b;
+}
+
+function buildMenu() {
+  menuEl.innerHTML = '';
+  let tip = '';
+  if (padMenu) {
+    for (const [type, tw] of Object.entries(TOWERS)) {
+      const picked = padMenu.pick === type;
+      const b = menuButton(`<b>${tw.name.replace(' Tower', '')}</b><span class="c">${tw.cost}g</span>`, () => {
+        if (G.gold < tw.cost) { SFX.play('error', 0.2); return; }
+        if (lastPointer === 'touch' && padMenu.pick !== type) { padMenu.pick = type; SFX.play('click'); return; }
+        if (placeTower(type, padMenu.c, padMenu.r)) padMenu = null;
+      }, picked ? 'picked' : '');
+      b.prepend(towerIcon(type));
+      b.dataset.cost = tw.cost;
+      b.addEventListener('mouseenter', () => { if (lastPointer !== 'touch') padMenu.pick = type; });
+      menuEl.append(b);
+    }
+    tip = lastPointer === 'touch' ? (padMenu.pick ? `Tap ${TOWERS[padMenu.pick].name} again to build` : 'Tap a weapon to see its range') : '';
+  } else if (selected) {
+    const t = selected, b = TOWERS[t.type];
+    if (t.level === MAX_LEVEL - 1) {
+      for (const [k, v] of Object.entries(b.branches)) {
+        // On touch the first tap explains the path, the second buys it.
+        const bt = menuButton(`<b style="color:${v.color}">${v.name}</b><span class="c">${upgradeCost(t)}g</span>`, () => {
+          if (lastPointer === 'touch' && branchPick !== k) { branchPick = k; SFX.play('click'); return; }
+          branchPick = null; upgradeTower(selected, k);
+        }, branchPick === k ? 'picked' : '');
+        bt.addEventListener('mouseenter', () => { if (lastPointer !== 'touch') branchPick = k; });
+        bt.title = v.desc; bt.dataset.cost = upgradeCost(t);
+        menuEl.append(bt);
+      }
+    } else if (t.level < MAX_LEVEL) {
+      const bt = menuButton(`<b>Upgrade</b><span class="c">${upgradeCost(t)}g</span>`, () => upgradeTower(selected));
+      bt.dataset.cost = upgradeCost(t);
+      menuEl.append(bt);
+    }
+    menuEl.append(menuButton(`<b>Target</b><span>${AIMS[t.aim].name}</span>`, () => cycleAim(selected)));
+    const armed = sellArmed && performance.now() - sellArmed < 2500;
+    menuEl.append(menuButton(armed ? `<b>Confirm</b><span class="c">+${sellValue(t)}g</span>` : `<b>Sell</b><span class="c">+${sellValue(t)}g</span>`, () => {
+      if (performance.now() - sellArmed < 2500) { sellArmed = 0; sellTower(selected); }
+      else { sellArmed = performance.now(); SFX.play('click'); }
+    }, armed ? 'warn' : ''));
+    const br = branchOf(t);
+    const bp = branchPick && t.level === MAX_LEVEL - 1 ? b.branches[branchPick] : null;
+    tip = bp ? `${bp.name}: ${bp.desc}${lastPointer === 'touch' ? ' · tap again to buy' : ''}`
+      : t.level === MAX_LEVEL - 1 ? 'Final upgrade: choose a path' : `${b.name}${br ? ' · ' + br.name : ''} · level ${t.level}`;
+  }
+  if (tip) { const d = document.createElement('div'); d.className = 'tip'; d.textContent = tip; menuEl.append(d); }
+}
+
+function syncMenu() {
+  if (mode !== 'play' || G.over) { padMenu = null; }
+  if (padMenu && !canBuild(padMenu.c, padMenu.r)) padMenu = null;
+  const show = padMenu || selected;
+  if (!show) { menuEl.hidden = true; menuKey = ''; return; }
+  const armed = sellArmed && performance.now() - sellArmed < 2500;
+  const key = padMenu ? `p${padMenu.c},${padMenu.r},${padMenu.pick},${lastPointer}`
+    : `t${selected.id},${selected.level},${selected.aim},${armed},${branchPick},${lastPointer}`;
+  if (key !== menuKey) { menuKey = key; buildMenu(); }
+  menuEl.querySelectorAll('button[data-cost]').forEach(b => { b.disabled = G.gold < +b.dataset.cost; });
+  menuEl.hidden = false;
+  // Place the menu above the spot (or below when there is no room), kept inside the map.
+  const c = padMenu ? padMenu.c : selected.c, r = padMenu ? padMenu.r : selected.r;
+  const k = cvs.clientWidth / W, ox = cvs.offsetLeft + cvs.clientLeft, oy = cvs.offsetTop + cvs.clientTop;
+  const cx = ox + (c * TILE + TILE / 2) * k, cy = oy + (r * TILE + TILE / 2) * k;
+  const mw = menuEl.offsetWidth, mh = menuEl.offsetHeight, gap = 24 * k + 8;
+  const above = cy - gap - mh - 22 > oy;
+  menuEl.classList.toggle('above', above);
+  menuEl.style.left = Math.max(ox + 4, Math.min(ox + cvs.clientWidth - mw - 4, cx - mw / 2)) + 'px';
+  menuEl.style.top = (above ? cy - gap - mh : cy + gap) + 'px';
+}
+
+// ---------------------------------------------------------------------------
 // Input
 // ---------------------------------------------------------------------------
 function toCanvas(e) {
@@ -2573,43 +2706,59 @@ function toCanvas(e) {
   return { x: (e.clientX - rect.left) * W / rect.width, y: (e.clientY - rect.top) * H / rect.height };
 }
 cvs.addEventListener('mousemove', e => { mouse = toCanvas(e); });
-// On touch screens there is no hover, so the first tap previews (range, road spot) and a second tap confirms.
-let lastPointer = 'mouse', pendingTap = null;
-window.addEventListener('pointerdown', e => { lastPointer = e.pointerType; }, true);
-function needsConfirm(p) {
-  if (lastPointer !== 'touch' || !(placing || aiming)) { pendingTap = null; return false; }
-  const same = pendingTap && (aiming ? Math.hypot(pendingTap.x - p.x, pendingTap.y - p.y) < 28
-    : Math.floor(pendingTap.x / TILE) === Math.floor(p.x / TILE) && Math.floor(pendingTap.y / TILE) === Math.floor(p.y / TILE));
-  if (same) { pendingTap = null; return false; }
-  pendingTap = p; mouse = p;
-  return true;
+let lastPointer = 'mouse';
+// The pad or tower whose centre is closest to p, within maxD game pixels.
+function nearestSpot(p, maxD) {
+  let best = null, bd = maxD;
+  for (const pd of MAP.pads) {
+    const d = Math.hypot(pd.c * TILE + TILE / 2 - p.x, pd.r * TILE + TILE / 2 - p.y);
+    if (d < bd) { bd = d; best = pd; }
+  }
+  return best;
 }
+// Tapping outside the map and menus closes an open menu.
+document.addEventListener('click', e => {
+  if (mode === 'play' && !e.target.closest('#menu, #c, #panel, #overlay')) closeMenus();
+});
+window.addEventListener('pointerdown', e => { lastPointer = e.pointerType === 'touch' || e.pointerType === 'pen' ? 'touch' : 'mouse'; }, true);
 cvs.addEventListener('mouseleave', () => { mouse = null; });
 cvs.addEventListener('click', e => {
   if (mode !== 'play' || G.over) return;
   const p = toCanvas(e);
-  const c = Math.floor(p.x / TILE), r = Math.floor(p.y / TILE);
+  // Pads look small on a phone, so a tap near one counts as a tap on it.
+  const spot = nearestSpot(p, aiming ? 0 : 34);
+  const c = spot ? spot.c : Math.floor(p.x / TILE), r = spot ? spot.r : Math.floor(p.y / TILE);
   const existing = towerAt(c, r);
-  if (lastPointer === 'touch') mouse = p;
-  if (needsConfirm(p) && !(placing && existing)) return;
+  // On touch there is no hover: keep the last tap as the pointer so range previews follow it.
+  mouse = lastPointer === 'touch' ? null : p;
+  sellArmed = 0;
   if (aiming) {
     if (castPower(aiming, p.x, p.y)) aiming = null;
     return;
   }
-  if (placing) {
+  if (placing) { // weapon picked from the armory: one tap on a free pad builds it
     if (placeTower(placing, c, r)) { if (!e.shiftKey) placing = null; }
     else if (existing) { placing = null; selected = existing; }
+    else if (!canBuild(c, r)) placing = null;
     return;
   }
-  selected = existing || null;
+  if (existing) { selected = selected === existing ? null : existing; padMenu = null; branchPick = null; }
+  else if (canBuild(c, r)) {
+    const same = padMenu && padMenu.c === c && padMenu.r === r;
+    padMenu = same ? null : { c, r, pick: null }; selected = null;
+    if (!same) SFX.play('click');
+  } else closeMenus();
 });
-cvs.addEventListener('contextmenu', e => { e.preventDefault(); placing = null; selected = null; aiming = null; });
+cvs.addEventListener('contextmenu', e => { e.preventDefault(); placing = null; aiming = null; closeMenus(); });
 window.addEventListener('keydown', e => {
   if (e.key === 'm' || e.key === 'M') { SFX.toggle(); SFX.play('click'); return; }
   if (mode !== 'play') return;
   const keys = Object.keys(TOWERS);
-  if (e.key >= '1' && e.key <= String(keys.length)) togglePlacing(keys[+e.key - 1]);
-  else if (e.key === 'Escape') { placing = null; selected = null; aiming = null; }
+  if (e.key >= '1' && e.key <= String(keys.length)) {
+    if (padMenu) { if (placeTower(keys[+e.key - 1], padMenu.c, padMenu.r)) padMenu = null; }
+    else togglePlacing(keys[+e.key - 1]);
+  }
+  else if (e.key === 'Escape') { placing = null; aiming = null; closeMenus(); }
   else if (e.key === 'q' || e.key === 'Q') togglePower('volley');
   else if (e.key === 'w' || e.key === 'W') togglePower('reinforce');
   else if (e.key === ' ') { e.preventDefault(); startWave(); }
