@@ -478,7 +478,7 @@ const REF_POWER = 290; // typical pad coverage; see roadPower
 const effWave = n => n * 10 / WAVES;
 function hpScale(n) {
   const k = effWave(n) - 1;
-  const roadMul = Math.min(1.2, Math.max(0.8, (MAP.power / REF_POWER) ** 1.5));
+  const roadMul = Math.min(1.2, Math.max(0.7, (MAP.power / REF_POWER) ** 1.5));
   const endless = LEVEL.endless ? 1.08 ** n : 1; // the Daily Siege keeps getting harder
   return (1 + 0.2 * k + 0.015 * k * k) * LEVEL.diff * roadMul * endless;
 }
@@ -714,8 +714,15 @@ function buildMap(lvl, index, wp, seed) {
     if (near) grid[r][c] = 1;
   }
 
-  const pts = wp.map(([c, r]) => ({ x: c * TILE + TILE / 2, y: r * TILE + TILE / 2 }));
-  pts[pts.length - 1].y = castle.y + castle.h - 4; // stop at the gate
+  const corners = wp.map(([c, r]) => ({ x: c * TILE + TILE / 2, y: r * TILE + TILE / 2 }));
+  corners[corners.length - 1].y = castle.y + castle.h - 4; // stop at the gate
+  const pts = curvyRoad(corners, mulberry32(seed + 77));
+  // Tiles the wobbly road actually crosses count as road, so nothing is built on it.
+  for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) {
+    if (grid[r][c] === 3) continue;
+    const x = c * TILE + TILE / 2, y = r * TILE + TILE / 2;
+    if (pts.some(p => Math.abs(p.x - x) < 26 && Math.abs(p.y - y) < 26)) grid[r][c] = 2;
+  }
   const segs = [];
   let len = 0;
   for (let i = 0; i < pts.length - 1; i++) {
@@ -730,6 +737,42 @@ function buildMap(lvl, index, wp, seed) {
   return map;
 }
 
+// Turns the grid road (straight runs, square corners) into a natural one: corners become
+// curves of random radius and the whole road wanders a little from side to side.
+function curvyRoad(corners, rnd) {
+  const rounded = [corners[0]];
+  for (let i = 1; i < corners.length - 1; i++) {
+    const a = corners[i - 1], b = corners[i], c = corners[i + 1];
+    const la = Math.hypot(b.x - a.x, b.y - a.y), lc = Math.hypot(c.x - b.x, c.y - b.y);
+    const R = Math.min(la / 2, lc / 2, 30 + rnd() * 42);
+    const p0 = { x: b.x + (a.x - b.x) * R / la, y: b.y + (a.y - b.y) * R / la };
+    const p2 = { x: b.x + (c.x - b.x) * R / lc, y: b.y + (c.y - b.y) * R / lc };
+    for (let k = 0; k <= 10; k++) { // quadratic curve through the corner
+      const t = k / 10, u = 1 - t;
+      rounded.push({ x: u * u * p0.x + 2 * u * t * b.x + t * t * p2.x, y: u * u * p0.y + 2 * u * t * b.y + t * t * p2.y });
+    }
+  }
+  rounded.push(corners[corners.length - 1]);
+  // Resample evenly, then push each point sideways by a few overlapping waves.
+  const dense = [rounded[0]];
+  for (let i = 1; i < rounded.length; i++) {
+    const a = rounded[i - 1], b = rounded[i], l = Math.hypot(b.x - a.x, b.y - a.y);
+    for (let d = 8; d < l; d += 8) dense.push({ x: a.x + (b.x - a.x) * d / l, y: a.y + (b.y - a.y) * d / l });
+    dense.push(b);
+  }
+  const waves = [[11, 95 + rnd() * 70], [4.5, 32 + rnd() * 16], [1.5, 12 + rnd() * 5]].map(([amp, len]) => ({ amp, len, ph: rnd() * 7 }));
+  let s = 0;
+  const lens = dense.map((p, i) => (s += i ? Math.hypot(p.x - dense[i - 1].x, p.y - dense[i - 1].y) : 0));
+  const total = s;
+  return dense.map((p, i) => {
+    const a = dense[Math.max(0, i - 1)], b = dense[Math.min(dense.length - 1, i + 1)];
+    const tl = Math.hypot(b.x - a.x, b.y - a.y) || 1, nx = -(b.y - a.y) / tl, ny = (b.x - a.x) / tl;
+    const taper = Math.max(0, Math.min(1, lens[i] / 90, (total - lens[i] - 30) / 110)); // straight at the portal and the gate
+    const off = waves.reduce((sum, w) => sum + w.amp * Math.sin(lens[i] / w.len + w.ph), 0) * taper;
+    return { x: p.x + nx * off, y: p.y + ny * off };
+  });
+}
+
 // Towers can only stand on a limited number of stone pads, so where to build is a real choice.
 // Pads favour tiles that see a lot of road (bends, switchbacks) with some randomness, and never touch each other.
 function choosePads(map, count, rnd) {
@@ -737,11 +780,13 @@ function choosePads(map, count, rnd) {
   for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) {
     if (map.grid[r][c] !== 1) continue;
     const x = c * TILE + TILE / 2, y = r * TILE + TILE / 2;
-    let cov = 0;
+    let cov = 0, near = Infinity;
     for (let d = 0; d < map.len; d += 10) {
-      const p = pointAt(d, map);
-      if (Math.hypot(p.x - x, p.y - y) < 130) cov++;
+      const p = pointAt(d, map), k = Math.hypot(p.x - x, p.y - y);
+      if (k < 130) cov++;
+      near = Math.min(near, k);
     }
+    if (near < 40) continue; // a pad must not overlap the road
     if (cov > 0) cands.push({ c, r, score: cov * (0.6 + 0.8 * rnd()) });
   }
   cands.sort((a, b) => b.score - a.score);
@@ -771,14 +816,12 @@ function roadPower(map) {
 }
 
 function pointAt(d, map = MAP) {
-  for (const s of map.segs) {
-    if (d <= s.start + s.len) {
-      const t = (d - s.start) / s.len;
-      return { x: s.a.x + (s.b.x - s.a.x) * t, y: s.a.y + (s.b.y - s.a.y) * t, ang: s.ang };
-    }
-  }
-  const s = map.segs[map.segs.length - 1];
-  return { x: s.b.x, y: s.b.y, ang: s.ang };
+  const segs = map.segs;
+  if (d >= map.len) { const s = segs[segs.length - 1]; return { x: s.b.x, y: s.b.y, ang: s.ang }; }
+  let lo = 0, hi = segs.length - 1; // the road has hundreds of short segments: binary search
+  while (lo < hi) { const mid = (lo + hi) >> 1; if (segs[mid].start + segs[mid].len < d) lo = mid + 1; else hi = mid; }
+  const s = segs[lo], t = s.len ? Math.max(0, d - s.start) / s.len : 0;
+  return { x: s.a.x + (s.b.x - s.a.x) * t, y: s.a.y + (s.b.y - s.a.y) * t, ang: s.ang };
 }
 
 // ---------------------------------------------------------------------------
@@ -1093,9 +1136,25 @@ function renderMap(map) {
     map.pts.forEach(p => g.lineTo(p.x, p.y));
     g.lineTo(map.pts[map.pts.length - 1].x, map.castle.y + map.castle.h - 20);
   };
-  trace(); g.strokeStyle = S.pathEdge; g.lineWidth = 40; g.stroke();
-  trace(); g.strokeStyle = S.path; g.lineWidth = 32; g.stroke();
-  trace(); g.strokeStyle = S.pathLight; g.lineWidth = 12; g.stroke();
+  // Ragged edges: blobs of earth along both sides so the road width varies like a worn track.
+  const blobs = (color, base, spread, side) => {
+    g.fillStyle = color;
+    for (let d = 0; d < map.len; d += 9) {
+      const p = pointAt(d, map), o = (R() - .5) * spread + side * (R() * 3);
+      circle(g, p.x - Math.sin(p.ang) * o, p.y + Math.cos(p.ang) * o, base + R() * 5);
+    }
+  };
+  trace(); g.strokeStyle = S.pathEdge; g.lineWidth = 38; g.stroke();
+  blobs(S.pathEdge, 16, 10, 0);
+  trace(); g.strokeStyle = S.path; g.lineWidth = 29; g.stroke();
+  blobs(S.path, 12, 9, 0);
+  trace(); g.strokeStyle = S.pathLight; g.lineWidth = 11; g.stroke();
+  for (let i = 0; i < 70; i++) { // pebbles and tufts that stray onto the road edges
+    const p = pointAt(R() * map.len, map), side = R() < .5 ? -1 : 1, o = side * (15 + R() * 6);
+    const x = p.x - Math.sin(p.ang) * o, y = p.y + Math.cos(p.ang) * o;
+    if (R() < .5) { g.fillStyle = 'rgba(0,0,0,.25)'; circle(g, x + 1, y + 1, 2.4); g.fillStyle = '#9a9a8e'; circle(g, x, y, 2.2); }
+    else if (S.blades) { g.strokeStyle = S.blades[0]; g.lineWidth = 1.2; for (let k = 0; k < 4; k++) { g.beginPath(); g.moveTo(x + k - 2, y); g.lineTo(x + k * 1.5 - 3, y - 4 - R() * 3); g.stroke(); } }
+  }
   for (let i = 0; i < 420; i++) {
     const p = pointAt(R() * map.len, map);
     const off = (R() - .5) * 28;
