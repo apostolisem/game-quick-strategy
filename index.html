@@ -141,6 +141,8 @@
   #info .row { display: flex; gap: 6px; }
   #info .row button { flex: 1; }
   #info button.aim { width: 100%; margin-bottom: 6px; font-size: 12px; }
+  #info button.branch { display: block; width: 100%; text-align: left; margin-bottom: 6px; font-size: 13px; }
+  #info button.branch small { display: block; color: var(--muted); font-size: 11px; }
   #info p { margin: 0 0 6px; color: var(--muted); line-height: 1.4; }
   .controls { display: flex; gap: 6px; margin-top: 12px; }
   #startBtn { flex: 1; }
@@ -320,23 +322,23 @@ const LEVELS = [
     newFoes: 'Goblins, Wolves and Orcs. An Ogre Warlord leads the final wave.',
   },
   {
-    name: 'Amberleaf Hollow', season: 'autumn', gold: 190, diff: 1.35, pads: 12,
+    name: 'Amberleaf Hollow', season: 'autumn', gold: 190, diff: 1.45, pads: 12,
     road: { runs: [3, 3], horiz: [20, 30] },
-    roster: ['goblin', 'wolf', 'orc', 'troll', 'knight'], midBoss: true, finalBosses: 1,
+    roster: ['goblin', 'wolf', 'orc', 'troll', 'knight', 'shaman'], midBoss: true, finalBosses: 1,
     desc: 'Falling leaves hide the road as it winds through the hollow. The enemy has brought heavier troops.',
-    newFoes: '<b>Armored Knights</b>: their armor blocks part of every hit, so weak, fast shots barely scratch them. Catapults and upgraded weapons punch through. <b>Trolls</b> are slow but very tough.',
+    newFoes: '<b>Armored Knights</b>: their armor blocks part of every hit, so weak, fast shots barely scratch them. Catapults and Longbows punch through. <b>Trolls</b> are slow but very tough. <b>Goblin Shamans</b> heal everything around them: aim at them first.',
   },
   {
-    name: 'Frostpine Ridge', season: 'winter', gold: 230, diff: 1.6, pads: 14,
+    name: 'Frostpine Ridge', season: 'winter', gold: 230, diff: 1.5, pads: 14,
     road: { runs: [4, 4], horiz: [34, 46], wide: true },
-    roster: ['goblin', 'wolf', 'orc', 'troll', 'knight', 'bat'], midBoss: true, finalBosses: 2,
+    roster: ['goblin', 'wolf', 'orc', 'troll', 'knight', 'bat', 'shaman', 'raven'], midBoss: true, finalBosses: 2,
     desc: 'A long road that switches back and forth up the snowy ridge. More road means more time to shoot, and more monsters to shoot at.',
-    newFoes: '<b>Bats</b> fly above the road. Catapult stones can\'t hit them, so keep Archers and Frost Mages ready.',
+    newFoes: '<b>Bats</b> fly above the road. Catapult stones can\'t hit them, so keep Archers and Frost Mages ready. <b>Ravens</b> ignore the road and fly straight at the castle.',
   },
   {
-    name: 'Mirefen Crossing', season: 'swamp', gold: 270, diff: 1.55, pads: 10,
+    name: 'Mirefen Crossing', season: 'swamp', gold: 270, diff: 1.7, pads: 10,
     road: { runs: [2, 2], horiz: [8, 14] },
-    roster: ['goblin', 'wolf', 'orc', 'troll', 'knight', 'bat'], midBoss: true, finalBosses: 2,
+    roster: ['goblin', 'wolf', 'orc', 'troll', 'knight', 'bat', 'shaman', 'raven'], midBoss: true, finalBosses: 2,
     desc: 'A short road across the bog leaves little room for error. Every kind of monster attacks here, and two Warlords lead the final wave.',
     newFoes: 'Everything at once. Plan your kill zone carefully: the road is short.',
   },
@@ -346,14 +348,26 @@ const TOWERS = {
   archer: {
     name: 'Archer Tower', cost: 60, range: 130, damage: 8, rate: 0.6, air: true, perk: 'arrows',
     proj: 'arrow', desc: 'Fast shots at one target. Hits flyers. Weak against armor.',
+    branches: {
+      a: { name: 'Longbow',    desc: '+35% range, arrows pierce armor', range: 1.35, pierce: true, color: '#7fbf4a' },
+      b: { name: 'Rapid Fire', desc: 'Shoots twice as fast',            rate: 0.5, damage: 0.9,     color: '#e0503a' },
+    },
   },
   catapult: {
     name: 'Catapult', cost: 100, range: 165, damage: 34, rate: 2.0, splash: 60, air: false, perk: 'stones',
     proj: 'rock', desc: 'Heavy stones that crush groups and armor. Ground only.',
+    branches: {
+      a: { name: 'Fire Pots', desc: 'Sets monsters ablaze: +75% damage as a burn over 3s', burn: 0.75,            color: '#ff8a2a' },
+      b: { name: 'Boulder',   desc: 'x2.2 damage, smaller splash, slower',                  damage: 2.2, splash: 0.75, rate: 1.25, color: '#b5b5ae' },
+    },
   },
   mage: {
     name: 'Frost Mage', cost: 70, range: 115, damage: 7, rate: 0.9, slow: 0.5, slowDur: 2.0, air: true, perk: 'frost',
     proj: 'frost', desc: 'Slows monsters. Chilled monsters take +25% damage from everything. Hits flyers.',
+    branches: {
+      a: { name: 'Blizzard',  desc: 'Every shot hits all monsters in range', aoe: true, damage: 0.8, rate: 1.3, color: '#ffffff' },
+      b: { name: 'Ice Lance', desc: 'x3 damage and freezes the target solid for a moment', damage: 3, freeze: 0.8, color: '#5fd0ff' },
+    },
   },
 };
 const MAX_LEVEL = 3;
@@ -365,6 +379,8 @@ const MONSTERS = {
   troll:  { name: 'Troll',  plural: 'Trolls',  hp: 260, speed: 26, reward: 20, dmg: 4, r: 20, color: '#7d6fa0' },
   knight: { name: 'Armored Knight', plural: 'Armored Knights', hp: 110, speed: 34, reward: 12, dmg: 3, r: 15, color: '#9aa3ad', armor: 7 },
   bat:    { name: 'Bat',    plural: 'Bats',    hp: 32,  speed: 78, reward: 6,  dmg: 1, r: 12, color: '#4b3a5c', fly: true },
+  shaman: { name: 'Goblin Shaman', plural: 'Goblin Shamans', hp: 55, speed: 44, reward: 12, dmg: 1, r: 13, color: '#6aa84f', heal: true },
+  raven:  { name: 'Raven',  plural: 'Ravens',  hp: 24,  speed: 50, reward: 6,  dmg: 1, r: 11, color: '#222', fly: true, direct: true },
   ogre:   { name: 'Ogre Warlord', plural: 'Ogre Warlords', hp: 1100, speed: 20, reward: 80, dmg: 10, r: 28, color: '#a8583a', boss: true },
 };
 
@@ -399,6 +415,8 @@ function buildWave(n, lvl = LEVEL) {
   if (e >= 4 && has('troll')) add('troll', Math.floor((e - 2) / 2), 2.0);
   if (e >= 3 && has('knight')) add('knight', Math.floor(e * 0.6), 1.3);
   if (e >= 2 && has('bat')) add('bat', Math.floor(e + 1), 0.45);
+  if (e >= 3 && has('shaman')) add('shaman', Math.floor((e - 1) / 3), 2.2);
+  if (e >= 4 && has('raven')) add('raven', Math.floor(e * 0.4), 0.9);
   // Shuffle the regular monsters, bosses always come last.
   const rnd = mulberry32(n * 977 + lvl.gold);
   for (let i = groups.length - 1; i > 0; i--) {
@@ -1062,7 +1080,7 @@ function newGame() {
   G = {
     gold: LEVEL.gold + 30 * perk('treasury'), hp: maxHp, maxHp, wave: 0, waveActive: false, pendingBonus: 0, nextIn: 0,
     spawnQ: [], spawnT: 0,
-    powerCd: { volley: 0, reinforce: 0 }, soldiers: [], strikes: [],
+    powerCd: { volley: 0, reinforce: 0 }, soldiers: [], strikes: [], rings: [],
     monsters: [], towers: [], projs: [], parts: [], texts: [],
     speed: gameSpeed, paused: false, over: false,
     shake: 0, castleFlash: 0, time: 0, banner: null,
@@ -1075,16 +1093,20 @@ function newGame() {
 function towerAt(c, r) { return G.towers.find(t => t.c === c && t.r === r); }
 function canBuild(c, r) { return inGrid(c, r) && MAP.grid[r][c] === PAD && !towerAt(c, r); }
 
+// Level 3 towers pick one of two specialisations.
+const branchOf = t => t.level >= MAX_LEVEL && t.branch ? TOWERS[t.type].branches[t.branch] : null;
 function stats(t) {
   const b = TOWERS[t.type], L = t.level - 1, p = perk(b.perk);
   const perkMul = t.type === 'mage' ? 1 + 0.15 * p : 1 + 0.12 * p;
+  const br = branchOf(t) || {};
   return {
-    damage: Math.round(b.damage * (1 + 0.6 * L) * perkMul),
-    range: b.range * (1 + 0.1 * L),
-    rate: b.rate * (1 - 0.12 * L),
-    splash: b.splash ? b.splash * (1 + 0.1 * L) : 0,
+    damage: Math.round(b.damage * (1 + 0.6 * L) * perkMul * (br.damage || 1)),
+    range: b.range * (1 + 0.1 * L) * (br.range || 1),
+    rate: b.rate * (1 - 0.12 * L) * (br.rate || 1),
+    splash: b.splash ? b.splash * (1 + 0.1 * L) * (br.splash || 1) : 0,
     slow: b.slow || 0,
     slowDur: b.slowDur ? (b.slowDur + 0.4 * L) * perkMul : 0,
+    pierce: !!br.pierce, burn: br.burn || 0, aoe: !!br.aoe, freeze: br.freeze || 0,
   };
 }
 const upgradeCost = t => Math.round(TOWERS[t.type].cost * 0.75 * t.level);
@@ -1106,13 +1128,17 @@ function placeTower(type, c, r) {
   return true;
 }
 
-function upgradeTower(t) {
+function upgradeTower(t, branch) {
   if (!t || t.level >= MAX_LEVEL) return;
+  if (t.level === MAX_LEVEL - 1 && !branch) { // the last upgrade needs a choice
+    floatText(t.x, t.y - 20, 'Choose a path', '#e8b84a'); SFX.play('error', 0.2); return;
+  }
   const cost = upgradeCost(t);
   if (G.gold < cost) return;
   G.gold -= cost; t.spent += cost; t.level++;
+  if (t.level === MAX_LEVEL) t.branch = branch;
   puff(t.x, t.y, '#e8b84a', 16);
-  floatText(t.x, t.y - 20, 'Level ' + t.level, '#e8b84a');
+  floatText(t.x, t.y - 20, branchOf(t) ? branchOf(t).name : 'Level ' + t.level, '#e8b84a');
   SFX.play('upgrade');
 }
 
@@ -1157,18 +1183,28 @@ function spawn(type, hpMul = 1) {
   const p = pointAt(0);
   G.monsters.push({
     type, hp: d.hp * sc, maxHp: d.hp * sc,
-    speed: d.speed * (0.94 + Math.random() * 0.12),
+    speed: d.speed * 1.15 * (0.94 + Math.random() * 0.12), // +15%: quicker waves
     reward: Math.round(d.reward * (1 + 0.05 * (G.wave - 1))),
     dist: 0, off: d.boss ? 0 : (Math.random() - .5) * 14,
     x: p.x, y: p.y, ang: 0, slowT: 0, slowF: 1, flash: 0,
     walk: Math.random() * 6, dead: false, fly: !!d.fly,
   });
+  if (d.direct) {
+    const m = G.monsters[G.monsters.length - 1], gate = MAP.pts[MAP.pts.length - 1];
+    m.flyFrom = { x: p.x + (Math.random() - .5) * 60, y: H + 10 };
+    m.flyTo = { x: gate.x + (Math.random() - .5) * 40, y: gate.y };
+    m.flyLen = Math.hypot(m.flyTo.x - m.flyFrom.x, m.flyTo.y - m.flyFrom.y); m.prog = 0;
+    m.x = m.flyFrom.x; m.y = m.flyFrom.y;
+    SFX.play('caw', 0.4);
+  }
 }
 
-function damage(m, amt, tower) {
+// pure damage (burns) skips armor and the chill bonus.
+function damage(m, amt, tower, pure = false) {
   if (m.dead) return;
-  if (m.slowT > 0) amt *= 1.25; // chilled monsters are brittle
-  const armor = MONSTERS[m.type].armor || 0;
+  if (m.slowT > 0 && !pure) amt *= 1.25; // chilled monsters are brittle
+  const pierce = pure || (tower && stats(tower).pierce);
+  const armor = pierce ? 0 : MONSTERS[m.type].armor || 0;
   let dealt = amt;
   if (armor) {
     dealt = Math.max(amt * 0.2, amt - armor);
@@ -1387,15 +1423,26 @@ function findTarget(t, range, air) {
 
 function fire(t, m, s) {
   const kind = TOWERS[t.type].proj;
+  if (s.aoe) { // Blizzard: one burst that hits everything in range
+    for (const o of G.monsters) {
+      if (o.dead || dist(t, o) > s.range) continue;
+      damage(o, s.damage, t);
+      o.slowT = Math.max(o.slowT, s.slowDur); o.slowF = 1 - s.slow;
+    }
+    G.rings.push({ x: t.x, y: t.y, r: s.range, t: 0.45, max: 0.45 });
+    t.anim = 1;
+    SFX.play('frost', 0.05);
+    return;
+  }
   if (kind === 'rock') {
     const flight = Math.min(1.0, Math.max(0.55, dist(t, m) / 240));
     const ahead = m.dist + m.speed * (m.slowT > 0 ? m.slowF : 1) * flight;
     const p = pointAt(Math.min(ahead, MAP.len));
-    G.projs.push({ kind, sx: t.x, sy: t.y, tx: p.x, ty: p.y, x: t.x, y: t.y, h: 0, t: 0, dur: flight, dmg: s.damage, splash: s.splash, tower: t });
+    G.projs.push({ kind, sx: t.x, sy: t.y, tx: p.x, ty: p.y, x: t.x, y: t.y, h: 0, t: 0, dur: flight, dmg: s.damage, splash: s.splash, burn: s.burn, big: s.damage > 60, tower: t });
   } else {
     G.projs.push({
       kind, x: t.x, y: t.y, target: m, lx: m.x, ly: m.y, ang: t.ang,
-      speed: kind === 'arrow' ? 560 : 330, dmg: s.damage, slow: s.slow, slowDur: s.slowDur, tower: t,
+      speed: kind === 'arrow' ? 560 : 330, dmg: s.damage, slow: s.slow, slowDur: s.slowDur, freeze: s.freeze, tower: t,
     });
   }
   t.anim = 1;
@@ -1426,6 +1473,34 @@ function update(dt) {
     if (m.dead) continue;
     m.slowT -= dt;
     m.flash -= dt;
+    if (m.burnT > 0) {
+      m.burnT -= dt; m.burnAcc = (m.burnAcc || 0) + m.burnDps * dt;
+      if (m.burnAcc >= 4 || m.burnT <= 0) { damage(m, m.burnAcc, m.burnBy, true); m.burnAcc = 0; }
+      if (Math.random() < 0.3) G.parts.push({ x: m.x + (Math.random() - .5) * 10, y: m.y - 4, vx: 0, vy: -40, life: 0.35, max: 0.35, color: '#ff9a3a', size: 2 });
+      if (m.dead) continue;
+    }
+    if (MONSTERS[m.type].heal && (m.healT = (m.healT ?? 1.2) - dt) <= 0) {
+      m.healT = 2.0;
+      let healed = false;
+      for (const o of G.monsters) {
+        if (o.dead || o === m || o.hp >= o.maxHp || dist(o, m) > 85) continue;
+        o.hp = Math.min(o.maxHp, o.hp + o.maxHp * 0.12); healed = true;
+        G.parts.push({ x: o.x, y: o.y - 8, vx: 0, vy: -30, life: 0.6, max: 0.6, color: '#8af07a', size: 2.4 });
+      }
+      if (healed) { G.rings.push({ x: m.x, y: m.y, r: 85, t: 0.5, max: 0.5, color: '120,240,110' }); SFX.play('heal', 0.3); }
+    }
+    if (m.freezeT > 0) { m.freezeT -= dt; continue; }
+    if (MONSTERS[m.type].direct) { // flies straight for the castle gate
+      const sf = m.slowT > 0 ? m.slowF : 1;
+      m.prog += m.speed * sf * dt; m.walk += dt * 6;
+      const k = Math.min(1, m.prog / m.flyLen), A = m.flyFrom, B = m.flyTo;
+      m.x = A.x + (B.x - A.x) * k + Math.sin(m.prog / 25) * 8 * (1 - k);
+      m.y = A.y + (B.y - A.y) * k;
+      m.ang = Math.atan2(B.y - A.y, B.x - A.x);
+      m.dist = k * MAP.len;
+      if (k >= 1) castleHit(m);
+      continue;
+    }
     if (m.holder && (m.holder.dead || m.holder.gone)) m.holder = null;
     if (m.holder) { // locked in melee with a footman
       m.holder.hp -= MONSTERS[m.type].dmg * 7 * dt;
@@ -1477,9 +1552,13 @@ function update(dt) {
         for (const m of G.monsters) {
           if (m.dead || m.fly) continue;
           const d = dist(p, m);
-          if (d <= p.splash) damage(m, p.dmg * (1 - 0.5 * d / p.splash), p.tower);
+          if (d > p.splash) continue;
+          const hit = p.dmg * (1 - 0.5 * d / p.splash);
+          damage(m, hit, p.tower);
+          if (p.burn && !m.dead) { m.burnT = 3; m.burnDps = Math.max(m.burnDps || 0, hit * p.burn / 3); m.burnBy = p.tower; }
         }
-        puff(p.x, p.y, '#a58a63', 16);
+        puff(p.x, p.y, p.burn ? '#ff8a2a' : '#a58a63', 16);
+        if (p.big) G.shake = Math.max(G.shake, 0.1);
         SFX.play('thud', 0.08);
         dctx.fillStyle = 'rgba(60,40,20,.18)'; circle(dctx, p.x, p.y, 9);
       }
@@ -1495,6 +1574,7 @@ function update(dt) {
         if (p.kind === 'frost') {
           p.target.slowT = Math.max(p.target.slowT, p.slowDur);
           p.target.slowF = 1 - p.slow;
+          if (p.freeze) p.target.freezeT = MONSTERS[p.target.type].boss ? p.freeze * 0.35 : p.freeze;
           puff(p.lx, p.ly, '#bfe3ff', 6);
         }
       }
@@ -1514,6 +1594,8 @@ function update(dt) {
 }
 
 function updateEffects(dt) {
+  for (const r of G.rings) r.t -= dt;
+  G.rings = G.rings.filter(r => r.t > 0);
   for (const p of G.parts) { p.life -= dt; p.x += p.vx * dt; p.y += p.vy * dt; p.vx *= 0.9; p.vy *= 0.9; }
   G.parts = G.parts.filter(p => p.life > 0);
   for (const t of G.texts) { t.life -= dt; t.y -= 26 * dt; }
@@ -1523,7 +1605,7 @@ function updateEffects(dt) {
 // ---------------------------------------------------------------------------
 // Rendering
 // ---------------------------------------------------------------------------
-function drawTower(g, type, x, y, ang, level, anim, time) {
+function drawTower(g, type, x, y, ang, level, anim, time, branch) {
   g.save(); g.translate(x, y);
   g.fillStyle = 'rgba(0,0,0,.32)';
   g.beginPath(); g.roundRect(-14, -12, 34, 34, 6); g.fill();
@@ -1579,6 +1661,10 @@ function drawTower(g, type, x, y, ang, level, anim, time) {
     g.fillStyle = '#e8b84a'; g.strokeStyle = '#5a4210'; g.lineWidth = 1;
     g.beginPath(); g.arc(-8 + i * 8, 15, 2.6, 0, Math.PI * 2); g.fill(); g.stroke();
   }
+  if (branch) { // specialisation gem in the corner
+    g.fillStyle = TOWERS[type].branches[branch].color; g.strokeStyle = '#2a2016'; g.lineWidth = 1.2;
+    g.beginPath(); g.moveTo(14, -19); g.lineTo(19, -14); g.lineTo(14, -9); g.lineTo(9, -14); g.closePath(); g.fill(); g.stroke();
+  }
   g.restore();
 }
 
@@ -1593,6 +1679,8 @@ const MON_ART = {
   knight: { light: '#62666e', base: '#2a2c32', dark: '#08090b', eye: '#ff3a1e' },
   bat:    { light: '#6e4c72', base: '#3a2340', dark: '#120814', eye: '#ff2a1a' },
   ogre:   { light: '#b86e4e', base: '#7a3a24', dark: '#33130a', eye: '#ff2a1a' },
+  shaman: { light: '#b6d86e', base: '#5f8a2a', dark: '#22360f', eye: '#9cff6a' },
+  raven:  { light: '#4a4f5c', base: '#1c1e24', dark: '#050507', eye: '#ffd23a' },
 };
 
 function glowEye(x, y, s, col) {
@@ -1789,6 +1877,44 @@ const PAINT = {
     glowEye(r * 0.28, -r * 0.18, 1.4, art.eye); glowEye(r * 0.28, r * 0.18, 1.4, art.eye);
   },
 
+  shaman(r, art, sw, grad, m) {
+    ctx.fillStyle = art.dark; circle(ctx, sw * r * 0.45, -r * 0.5, r * 0.26); circle(ctx, -sw * r * 0.45, r * 0.5, r * 0.26);
+    // bone-and-feather robe
+    ctx.save(); ctx.translate(-r * 0.2, 0); ctx.fillStyle = '#4a2a52'; spikyPath(r * 0.95, 8, 0.25); ctx.fill(); ctx.restore();
+    // staff with a glowing orb
+    ctx.strokeStyle = '#6a4626'; ctx.lineWidth = 2.2;
+    ctx.beginPath(); ctx.moveTo(-r * 0.4, r * 0.85); ctx.lineTo(r * 1.3, r * 0.75 + sw); ctx.stroke();
+    const glow = 0.6 + 0.4 * Math.sin(G.time * 6 + m.walk);
+    ctx.globalAlpha = 0.45 * glow; ctx.fillStyle = '#8af07a'; circle(ctx, r * 1.4, r * 0.75 + sw, r * 0.55);
+    ctx.globalAlpha = 1; ctx.fillStyle = '#d8ffc8'; circle(ctx, r * 1.4, r * 0.75 + sw, r * 0.22);
+    for (const s of [-1, 1]) { ctx.fillStyle = art.base; tri(r * 0.15, s * r * 0.35, -r * 0.9, s * r * 1.2, -r * 0.1, s * r * 0.7); }
+    ctx.fillStyle = grad(r * 0.68); circle(ctx, 0, 0, r * 0.68);
+    // feather headdress
+    for (let i = -2; i <= 2; i++) {
+      ctx.fillStyle = i % 2 ? '#d94a3a' : '#e8d070';
+      ctx.beginPath(); ctx.ellipse(-r * 0.55, i * r * 0.22, r * 0.45, r * 0.09, i * 0.25, 0, Math.PI * 2); ctx.fill();
+    }
+    glowEye(r * 0.32, -r * 0.24, 1.5, art.eye); glowEye(r * 0.32, r * 0.24, 1.5, art.eye);
+  },
+
+  raven(r, art, sw, grad, m) {
+    const flap = Math.sin(m.walk * 1.4);
+    const span = r * (1.5 + 0.5 * flap);
+    ctx.fillStyle = art.dark;
+    for (const s of [-1, 1]) {
+      ctx.beginPath(); ctx.moveTo(r * 0.3, s * r * 0.15);
+      ctx.quadraticCurveTo(r * 0.1, s * span * 0.8, -r * 0.5, s * span);
+      for (let i = 0; i < 4; i++) ctx.lineTo(-r * 0.55 - i * r * 0.12, s * (span - i * r * 0.28) * 0.95);
+      ctx.lineTo(-r * 0.4, s * r * 0.2); ctx.closePath(); ctx.fill();
+    }
+    // tail
+    ctx.beginPath(); ctx.moveTo(-r * 0.4, -r * 0.25); ctx.lineTo(-r * 1.3, -r * 0.4); ctx.lineTo(-r * 1.2, 0); ctx.lineTo(-r * 1.3, r * 0.4); ctx.lineTo(-r * 0.4, r * 0.25); ctx.fill();
+    ctx.fillStyle = grad(r * 0.6); ctx.beginPath(); ctx.ellipse(0, 0, r * 0.75, r * 0.38, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = grad(r * 0.32, r * 0.6, 0); circle(ctx, r * 0.6, 0, r * 0.32);
+    ctx.fillStyle = '#3a3a3a'; tri(r * 0.85, -r * 0.1, r * 0.85, r * 0.1, r * 1.3, 0);
+    glowEye(r * 0.68, -r * 0.13, 1.2, art.eye); glowEye(r * 0.68, r * 0.13, 1.2, art.eye);
+  },
+
   ogre(r, art, sw, grad, m) {
     ctx.fillStyle = art.dark; circle(ctx, sw * r * 0.4, -r * 0.6, r * 0.28); circle(ctx, -sw * r * 0.4, r * 0.6, r * 0.28);
     tatteredCape(r, r * 1.25, r * 0.95, '#2a0606', m.walk);
@@ -1838,7 +1964,7 @@ function drawMonster(m) {
     g.addColorStop(0, art.light); g.addColorStop(0.55, art.base); g.addColorStop(1, art.dark);
     return g;
   };
-  const lift = m.fly ? 6 : 0;
+  const lift = m.fly ? (d.direct ? 10 : 6) : 0;
 
   if (d.boss) {
     const pr = r * (1.9 + 0.15 * Math.sin(G.time * 4));
@@ -1855,7 +1981,11 @@ function drawMonster(m) {
   ctx.save(); ctx.translate(m.x, m.y - lift); ctx.rotate(m.ang);
   PAINT[m.type](r, art, Math.sin(m.walk), grad, m);
   if (m.flash > 0) { ctx.globalAlpha = 0.55; ctx.fillStyle = '#fff'; circle(ctx, 0, 0, r * 1.05); ctx.globalAlpha = 1; }
-  if (m.slowT > 0) {
+  if (m.freezeT > 0) {
+    ctx.fillStyle = 'rgba(190,235,255,.7)'; ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 1.2;
+    ctx.beginPath(); for (let i = 0; i < 6; i++) { const a = i / 6 * Math.PI * 2; ctx.lineTo(Math.cos(a) * r * 1.2, Math.sin(a) * r * 1.2); }
+    ctx.closePath(); ctx.fill(); ctx.stroke();
+  } else if (m.slowT > 0) {
     ctx.fillStyle = 'rgba(150,210,255,.35)'; circle(ctx, 0, 0, r * 1.15);
     ctx.fillStyle = '#e8f6ff'; circle(ctx, -r * 0.5, -r * 0.6, 1.2); circle(ctx, r * 0.4, r * 0.7, 1.2);
   }
@@ -1964,7 +2094,7 @@ function draw() {
   ctx.fillStyle = pct > .5 ? '#6fd04a' : pct > .25 ? '#e8b84a' : '#e0503a';
   ctx.fillRect(C.x, barY + 1, C.w * pct, 6);
 
-  for (const t of G.towers) drawTower(ctx, t.type, t.x, t.y, t.ang, t.level, t.anim, G.time);
+  for (const t of G.towers) drawTower(ctx, t.type, t.x, t.y, t.ang, t.level, t.anim, G.time, t.branch);
   if (selected) {
     drawRange(selected.x, selected.y, stats(selected).range, true);
     ctx.strokeStyle = '#e8b84a'; ctx.lineWidth = 2;
@@ -1975,6 +2105,12 @@ function draw() {
   [...G.monsters].sort((a, b) => (a.fly - b.fly) || (a.y - b.y)).forEach(drawMonster);
   G.projs.forEach(drawProjectile);
   G.strikes.forEach(drawStrike);
+  for (const r of G.rings) {
+    const k = 1 - r.t / r.max;
+    ctx.strokeStyle = `rgba(${r.color || '200,235,255'},${0.7 * (1 - k)})`; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.arc(r.x, r.y, r.r * (0.3 + 0.7 * k), 0, Math.PI * 2); ctx.stroke();
+    ctx.fillStyle = `rgba(${r.color || '200,235,255'},${0.12 * (1 - k)})`; circle(ctx, r.x, r.y, r.r * (0.3 + 0.7 * k));
+  }
   for (const p of G.parts) {
     ctx.globalAlpha = Math.max(0, p.life / p.max);
     ctx.fillStyle = p.color; circle(ctx, p.x, p.y, p.size);
@@ -2084,6 +2220,10 @@ function fmtStats(s) {
   const rows = [['Damage', s.damage], ['Range', Math.round(s.range)], ['Shots / sec', (1 / s.rate).toFixed(1)]];
   if (s.splash) rows.push(['Splash radius', Math.round(s.splash)]);
   if (s.slow) rows.push(['Slow', `${Math.round(s.slow * 100)}% for ${s.slowDur.toFixed(1)}s`]);
+  if (s.pierce) rows.push(['Armor', 'pierced']);
+  if (s.burn) rows.push(['Burn', `+${Math.round(s.burn * 100)}% over 3s`]);
+  if (s.aoe) rows.push(['Hits', 'all in range']);
+  if (s.freeze) rows.push(['Freeze', `${s.freeze}s`]);
   return rows;
 }
 
@@ -2098,19 +2238,24 @@ function renderInfo() {
 
   if (selected) {
     const t = selected, s = stats(t), b = TOWERS[t.type];
-    const maxed = t.level >= MAX_LEVEL;
-    const nextS = maxed ? null : stats({ ...t, level: t.level + 1 });
+    const maxed = t.level >= MAX_LEVEL, choosing = t.level === MAX_LEVEL - 1;
+    const nextS = maxed || choosing ? null : stats({ ...t, level: t.level + 1 });
     const cur = fmtStats(s), nxt = nextS ? fmtStats(nextS) : null;
+    const br = branchOf(t);
+    const branchBtns = choosing ? Object.entries(b.branches).map(([k, v]) =>
+      `<button class="branch" data-branch="${k}" style="border-left:4px solid ${v.color}"><b>${v.name}</b> · ${upgradeCost(t)}g<small>${v.desc}</small></button>`).join('') : '';
     els.info.innerHTML = `
-      <h3>${b.name} · Lv ${t.level}/${MAX_LEVEL}</h3>
-      <table>${cur.map((r, i) => `<tr><td>${r[0]}</td><td>${r[1]}${nxt && nxt[i][1] !== r[1] ? ` <span class="up">→ ${nxt[i][1]}</span>` : ''}</td></tr>`).join('')}
+      <h3>${b.name}${br ? ' · ' + br.name : ''} · Lv ${t.level}/${MAX_LEVEL}</h3>
+      <table>${cur.map((r, i) => `<tr><td>${r[0]}</td><td>${r[1]}${nxt && nxt[i] && nxt[i][1] !== r[1] ? ` <span class="up">→ ${nxt[i][1]}</span>` : ''}</td></tr>`).join('')}
       <tr><td>Kills</td><td id="kills">${t.kills}</td></tr></table>
       <button id="aimBtn" class="aim" title="Which monster to shoot (T)">Target: ${AIMS[t.aim].name}</button>
+      ${choosing ? `<p>Final upgrade: choose a path.</p>${branchBtns}` : ''}
       <div class="row">
-        <button id="upBtn">${maxed ? 'Max level' : `Upgrade (${upgradeCost(t)}g)`}</button>
+        ${choosing ? '' : `<button id="upBtn">${maxed ? 'Max level' : `Upgrade (${upgradeCost(t)}g)`}</button>`}
         <button id="sellBtn">Sell (+${sellValue(t)}g)</button>
       </div>`;
-    $('upBtn').onclick = () => upgradeTower(selected);
+    if ($('upBtn')) $('upBtn').onclick = () => upgradeTower(selected);
+    els.info.querySelectorAll('.branch').forEach(bt => { bt.onclick = () => upgradeTower(selected, bt.dataset.branch); });
     $('aimBtn').onclick = () => cycleAim(selected);
     $('sellBtn').onclick = () => sellTower(selected);
   } else if (aiming) {
@@ -2158,6 +2303,7 @@ function syncUI() {
   if (selected) {
     const k = $('kills'); if (k) setText(k, selected.kills);
     const up = $('upBtn'); if (up) up.disabled = selected.level >= MAX_LEVEL || G.gold < upgradeCost(selected);
+    els.info.querySelectorAll('.branch').forEach(bt => { bt.disabled = G.gold < upgradeCost(selected); });
   }
 
   let label;
