@@ -108,6 +108,14 @@
     position: relative;
   }
   .shop-item.active { outline: 2px solid var(--accent); background: #3f4a26; }
+  #powers { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+  .power { position: relative; overflow: hidden; text-align: left; padding: 6px 8px; }
+  .power strong { display: block; font-size: 13px; position: relative; }
+  .power small { display: block; color: var(--muted); font-size: 11px; position: relative; }
+  .power .cdfill { position: absolute; left: 0; bottom: 0; top: 0; background: rgba(0,0,0,.45); pointer-events: none; }
+  .power.ready { border-color: var(--gold); box-shadow: 0 0 8px rgba(232,184,74,.35); }
+  .power.active { outline: 2px solid var(--accent); background: #3f4a26; }
+  .power kbd { position: absolute; top: 4px; right: 6px; font-size: 10px; color: var(--muted); border: 1px solid #7a6440; border-radius: 3px; padding: 0 4px; }
   .shop-item canvas { flex: none; }
   .shop-item strong { display: block; font-size: 14px; }
   .shop-item small { display: block; color: var(--muted); font-size: 11px; line-height: 1.3; }
@@ -222,6 +230,9 @@
     <h2>Armory</h2>
     <div id="shop"></div>
 
+    <h2>King's Powers</h2>
+    <div id="powers"></div>
+
     <h2>Details</h2>
     <div id="info"></div>
 
@@ -237,6 +248,7 @@
     <p class="help">
       <kbd>1</kbd><kbd>2</kbd><kbd>3</kbd> pick a weapon · click a stone pad to build it<br>
       <kbd>Shift</kbd>+click places several · <kbd>Esc</kbd>/right-click cancels<br>
+      <kbd>Q</kbd> Arrow Volley · <kbd>W</kbd> Reinforcements<br>
       Click a weapon to upgrade or sell it (<kbd>U</kbd> upgrades, <kbd>T</kbd> changes its target)<br>
       <kbd>Space</kbd> starts a wave, or calls the next one early for bonus gold · <kbd>P</kbd> pauses · <kbd>M</kbd> sound
     </p>
@@ -1039,6 +1051,7 @@ let LEVEL = LEVELS[0], MAP = MAPS[0], BG = BGS[0];
 let mode = 'campaign'; // 'campaign' | 'play' | 'result'
 let G = null;
 let placing = null;   // tower type being placed
+let aiming = null;    // King's Power waiting for a target
 let selected = null;  // selected tower object
 let mouse = null;     // {x, y} in canvas space
 let nextTowerId = 1;
@@ -1049,11 +1062,12 @@ function newGame() {
   G = {
     gold: LEVEL.gold + 30 * perk('treasury'), hp: maxHp, maxHp, wave: 0, waveActive: false, pendingBonus: 0, nextIn: 0,
     spawnQ: [], spawnT: 0,
+    powerCd: { volley: 0, reinforce: 0 }, soldiers: [], strikes: [],
     monsters: [], towers: [], projs: [], parts: [], texts: [],
     speed: gameSpeed, paused: false, over: false,
     shake: 0, castleFlash: 0, time: 0, banner: null,
   };
-  placing = null; selected = null;
+  placing = null; selected = null; aiming = null;
   dctx.clearRect(0, 0, W, H);
   infoKey = '';
 }
@@ -1212,6 +1226,126 @@ function waveDone() {
 }
 
 // ---------------------------------------------------------------------------
+// King's Powers: free abilities on a cooldown that the player aims on the map
+// ---------------------------------------------------------------------------
+const POWERS = {
+  volley:    { name: 'Arrow Volley',   key: 'Q', cd: 22, radius: 75,
+               desc: 'Rain arrows on an area after a short delay. Hits flyers.' },
+  reinforce: { name: 'Reinforcements', key: 'W', cd: 30,
+               desc: 'Two footmen hold the road where you click for 12 seconds. Each blocks up to two monsters.' },
+};
+const volleyDamage = () => Math.round(35 + 12 * effWave(Math.max(1, G.wave)));
+
+// Closest point on the road to (x, y), or null if it is too far away.
+function roadPointNear(x, y, maxD = 36) {
+  let best = null, bd = maxD;
+  for (let d = 0; d <= MAP.len - 30; d += 5) {
+    const p = pointAt(d), k = Math.hypot(p.x - x, p.y - y);
+    if (k < bd) { bd = k; best = { d, x: p.x, y: p.y }; }
+  }
+  return best && best.y < H - 40 ? best : null; // not inside the fog at the portal
+}
+
+function togglePower(key) {
+  if (mode !== 'play' || G.over || G.powerCd[key] > 0) { SFX.play('error', 0.2); return; }
+  aiming = aiming === key ? null : key;
+  placing = null; selected = null;
+}
+
+function castPower(key, x, y) {
+  if (G.powerCd[key] > 0) return false;
+  if (key === 'volley') {
+    const arrows = [];
+    for (let i = 0; i < 26; i++) {
+      const a = Math.random() * Math.PI * 2, r = Math.sqrt(Math.random()) * POWERS.volley.radius;
+      arrows.push({ dx: Math.cos(a) * r, dy: Math.sin(a) * r, lag: Math.random() * 0.2 });
+    }
+    G.strikes.push({ x, y, t: 0.55, arrows, dmg: volleyDamage() });
+    SFX.play('volley');
+  } else {
+    const p = roadPointNear(x, y);
+    if (!p) { SFX.play('error', 0.2); floatText(x, y, 'Click on the road', '#ffb0a0'); return false; }
+    const hp = Math.round(70 + 22 * effWave(Math.max(1, G.wave)));
+    for (const side of [-1, 1]) {
+      G.soldiers.push({ d: p.d + (side > 0 ? 12 : 0), side, hp, maxHp: hp, life: 12, cd: 0, holding: [], swing: 0, x: p.x, y: p.y, ang: 0 });
+    }
+    puff(p.x, p.y, '#cfd8ff', 14);
+    SFX.play('march');
+  }
+  G.powerCd[key] = POWERS[key].cd;
+  return true;
+}
+
+function updateStrikes(dt) {
+  for (const s of G.strikes) {
+    s.t -= dt;
+    if (s.t <= 0 && !s.done) {
+      s.done = true;
+      for (const m of G.monsters) {
+        if (!m.dead && Math.hypot(m.x - s.x, m.y - s.y) <= POWERS.volley.radius + MONSTERS[m.type].r * 0.5) damage(m, s.dmg, null);
+      }
+      puff(s.x, s.y, '#c9b38a', 18);
+      SFX.play('thud', 0.05);
+      for (const a of s.arrows) { dctx.fillStyle = 'rgba(70,45,20,.35)'; dctx.fillRect(s.x + a.dx - 0.5, s.y + a.dy - 3, 1, 4); }
+    }
+  }
+  G.strikes = G.strikes.filter(s => !s.done);
+}
+
+function updateSoldiers(dt) {
+  for (const so of G.soldiers) {
+    so.holding = so.holding.filter(m => !m.dead && m.holder === so);
+    so.life -= dt; so.swing = Math.max(0, so.swing - dt * 4);
+    const p = pointAt(so.d);
+    so.x = p.x - Math.sin(p.ang) * so.side * 9; so.y = p.y + Math.cos(p.ang) * so.side * 9; so.ang = p.ang + Math.PI;
+    if (so.hp <= 0 && !so.dead) { so.dead = true; puff(so.x, so.y, '#7a0a0a', 10); puff(so.x, so.y, '#9aa6c8', 8); SFX.play('die'); }
+    if (so.life <= 0 && !so.gone) { so.gone = true; puff(so.x, so.y, '#cfd8ff', 8); }
+    if (so.dead || so.gone) { for (const m of so.holding) m.holder = null; so.holding = []; continue; }
+    so.cd -= dt;
+    const foe = so.holding[0];
+    if (foe && so.cd <= 0) {
+      so.cd = 0.7; so.swing = 1;
+      damage(foe, Math.round(10 + 3 * effWave(Math.max(1, G.wave))), null);
+      SFX.play('clink', 0.1);
+    }
+  }
+  G.soldiers = G.soldiers.filter(so => !so.dead && !so.gone);
+}
+
+function drawSoldier(so) {
+  const fade = Math.min(1, so.life / 0.6);
+  ctx.globalAlpha = fade;
+  ctx.fillStyle = 'rgba(0,0,0,.35)'; ctx.beginPath(); ctx.ellipse(so.x + 2, so.y + 3, 10, 8, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.save(); ctx.translate(so.x, so.y); ctx.rotate(so.holding.length ? Math.atan2(so.holding[0].y - so.y, so.holding[0].x - so.x) : so.ang);
+  // sword arm swings when striking
+  ctx.strokeStyle = '#e4e8ec'; ctx.lineWidth = 2;
+  const sw = so.swing * 1.2;
+  ctx.beginPath(); ctx.moveTo(2, 6); ctx.lineTo(2 + Math.cos(0.9 - sw) * 15, 6 + Math.sin(0.9 - sw) * 15 - 6); ctx.stroke();
+  ctx.fillStyle = '#2d4f9e'; circle(ctx, 0, 0, 8.5);                 // blue tabard
+  ctx.fillStyle = '#e8b84a'; ctx.fillRect(-1, -6, 2, 12); ctx.fillRect(-5, -1, 10, 2); // gold cross
+  ctx.fillStyle = '#8f98a8'; circle(ctx, 1, 0, 4.5);                 // helmet
+  ctx.fillStyle = '#5b3a1e'; ctx.beginPath(); ctx.ellipse(3, -8, 5, 3, 0, 0, Math.PI * 2); ctx.fill(); // shield
+  ctx.strokeStyle = '#e8b84a'; ctx.lineWidth = 1; ctx.stroke();
+  ctx.restore();
+  const pct = Math.max(0, so.hp / so.maxHp);
+  ctx.fillStyle = 'rgba(0,0,0,.6)'; ctx.fillRect(so.x - 10, so.y - 16, 20, 4);
+  ctx.fillStyle = '#7fb0ff'; ctx.fillRect(so.x - 9, so.y - 15, 18 * pct, 2);
+  ctx.globalAlpha = 1;
+}
+
+function drawStrike(s) {
+  const R = POWERS.volley.radius;
+  ctx.strokeStyle = `rgba(255,220,150,${0.35 + 0.3 * Math.sin(G.time * 20)})`; ctx.lineWidth = 2; ctx.setLineDash([4, 4]);
+  ctx.beginPath(); ctx.arc(s.x, s.y, R, 0, Math.PI * 2); ctx.stroke(); ctx.setLineDash([]);
+  ctx.strokeStyle = '#5a3a1a'; ctx.lineWidth = 1.5;
+  for (const a of s.arrows) {
+    const h = Math.max(0, s.t - a.lag * 0.5) * 700;
+    const x = s.x + a.dx + h * 0.15, y = s.y + a.dy - h;
+    ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + 3, y - 12); ctx.stroke();
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Effects
 // ---------------------------------------------------------------------------
 function puff(x, y, color, n) {
@@ -1285,12 +1419,28 @@ function update(dt) {
     }
   }
 
+  for (const p of Object.keys(G.powerCd)) G.powerCd[p] = Math.max(0, G.powerCd[p] - dt);
+  updateStrikes(dt);
+
   for (const m of G.monsters) {
     if (m.dead) continue;
     m.slowT -= dt;
     m.flash -= dt;
+    if (m.holder && (m.holder.dead || m.holder.gone)) m.holder = null;
+    if (m.holder) { // locked in melee with a footman
+      m.holder.hp -= MONSTERS[m.type].dmg * 7 * dt;
+      m.walk += dt * 2;
+      continue;
+    }
     const sf = m.slowT > 0 ? m.slowF : 1;
     const step = m.speed * sf * dt;
+    if (!m.fly) {
+      for (const so of G.soldiers) {
+        if (so.dead || so.gone || so.holding.length >= 2) continue;
+        if (m.dist < so.d && m.dist + step >= so.d) { m.holder = so; so.holding.push(m); break; }
+      }
+      if (m.holder) continue;
+    }
     m.dist += step;
     m.walk += step * 0.25;
     if (m.dist >= MAP.len) { castleHit(m); continue; }
@@ -1356,6 +1506,7 @@ function update(dt) {
     }
   }
   G.projs = G.projs.filter(p => !p.done);
+  updateSoldiers(dt);
   G.monsters = G.monsters.filter(m => !m.dead);
   updateEffects(dt);
 
@@ -1820,8 +1971,10 @@ function draw() {
     ctx.strokeRect(selected.x - 19, selected.y - 19, 38, 38);
   }
 
+  G.soldiers.forEach(drawSoldier);
   [...G.monsters].sort((a, b) => (a.fly - b.fly) || (a.y - b.y)).forEach(drawMonster);
   G.projs.forEach(drawProjectile);
+  G.strikes.forEach(drawStrike);
   for (const p of G.parts) {
     ctx.globalAlpha = Math.max(0, p.life / p.max);
     ctx.fillStyle = p.color; circle(ctx, p.x, p.y, p.size);
@@ -1831,7 +1984,17 @@ function draw() {
   ctx.drawImage(fog, 0, 0, W, H);
   drawPortal();
 
-  if (placing && mouse) {
+  if (aiming && mouse) {
+    if (aiming === 'volley') {
+      drawRange(mouse.x, mouse.y, POWERS.volley.radius, true);
+    } else {
+      const p = roadPointNear(mouse.x, mouse.y);
+      ctx.fillStyle = p ? 'rgba(127,176,255,.35)' : 'rgba(255,80,60,.25)';
+      circle(ctx, p ? p.x : mouse.x, p ? p.y : mouse.y, 20);
+      ctx.strokeStyle = p ? '#cfe0ff' : '#ff8070'; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.arc(p ? p.x : mouse.x, p ? p.y : mouse.y, 20, 0, Math.PI * 2); ctx.stroke();
+    }
+  } else if (placing && mouse) {
     const c = Math.floor(mouse.x / TILE), r = Math.floor(mouse.y / TILE);
     if (inGrid(c, r)) {
       const ok = canBuild(c, r) && G.gold >= TOWERS[placing].cost;
@@ -1896,11 +2059,25 @@ function buildShop() {
   });
 }
 
+const powerButtons = {};
+function buildPowers() {
+  const box = $('powers');
+  for (const [key, pw] of Object.entries(POWERS)) {
+    const b = document.createElement('button');
+    b.className = 'power';
+    b.title = pw.desc;
+    b.innerHTML = `<span class="cdfill"></span><strong>${pw.name}</strong><small>Ready</small><kbd>${pw.key}</kbd>`;
+    b.onclick = () => togglePower(key);
+    box.append(b);
+    powerButtons[key] = { b, fill: b.querySelector('.cdfill'), label: b.querySelector('small') };
+  }
+}
+
 function togglePlacing(key) {
   if (mode !== 'play' || G.over) return;
   if (G.gold < TOWERS[key].cost && placing !== key) return;
   placing = placing === key ? null : key;
-  selected = null;
+  selected = null; aiming = null;
 }
 
 function fmtStats(s) {
@@ -1913,6 +2090,7 @@ function fmtStats(s) {
 function renderInfo() {
   let key;
   if (selected) key = `t${selected.id}-${selected.level}-${selected.aim}`;
+  else if (aiming) key = 'a-' + aiming;
   else if (placing) key = 'p-' + placing;
   else key = 'none';
   if (key === infoKey) return;
@@ -1935,6 +2113,13 @@ function renderInfo() {
     $('upBtn').onclick = () => upgradeTower(selected);
     $('aimBtn').onclick = () => cycleAim(selected);
     $('sellBtn').onclick = () => sellTower(selected);
+  } else if (aiming) {
+    const pw = POWERS[aiming];
+    els.info.innerHTML = `
+      <h3>${pw.name}</h3>
+      <p>${pw.desc}</p>
+      ${aiming === 'volley' ? `<table><tr><td>Damage</td><td>${volleyDamage()}</td></tr><tr><td>Radius</td><td>${POWERS.volley.radius}</td></tr></table>` : ''}
+      <p>Click the map to use it. Cooldown ${pw.cd}s. Esc cancels.</p>`;
   } else if (placing) {
     const b = TOWERS[placing];
     const s = stats({ type: placing, level: 1 });
@@ -1961,6 +2146,14 @@ function syncUI() {
     b.classList.toggle('active', placing === key);
   }
   if (placing && G.gold < TOWERS[placing].cost) placing = null;
+  for (const [key, pb] of Object.entries(powerButtons)) {
+    const cd = G.powerCd[key], ready = cd <= 0;
+    pb.b.disabled = !playing;
+    pb.b.classList.toggle('ready', playing && ready);
+    pb.b.classList.toggle('active', aiming === key);
+    pb.fill.style.width = (ready ? 0 : 100 * cd / POWERS[key].cd) + '%';
+    setText(pb.label, aiming === key ? 'Click the map' : ready ? 'Ready' : Math.ceil(cd) + 's');
+  }
   renderInfo();
   if (selected) {
     const k = $('kills'); if (k) setText(k, selected.kills);
@@ -2151,6 +2344,10 @@ cvs.addEventListener('click', e => {
   const p = toCanvas(e);
   const c = Math.floor(p.x / TILE), r = Math.floor(p.y / TILE);
   const existing = towerAt(c, r);
+  if (aiming) {
+    if (castPower(aiming, p.x, p.y)) aiming = null;
+    return;
+  }
   if (placing) {
     if (placeTower(placing, c, r)) { if (!e.shiftKey) placing = null; }
     else if (existing) { placing = null; selected = existing; }
@@ -2158,13 +2355,15 @@ cvs.addEventListener('click', e => {
   }
   selected = existing || null;
 });
-cvs.addEventListener('contextmenu', e => { e.preventDefault(); placing = null; selected = null; });
+cvs.addEventListener('contextmenu', e => { e.preventDefault(); placing = null; selected = null; aiming = null; });
 window.addEventListener('keydown', e => {
   if (e.key === 'm' || e.key === 'M') { SFX.toggle(); SFX.play('click'); return; }
   if (mode !== 'play') return;
   const keys = Object.keys(TOWERS);
   if (e.key >= '1' && e.key <= String(keys.length)) togglePlacing(keys[+e.key - 1]);
-  else if (e.key === 'Escape') { placing = null; selected = null; }
+  else if (e.key === 'Escape') { placing = null; selected = null; aiming = null; }
+  else if (e.key === 'q' || e.key === 'Q') togglePower('volley');
+  else if (e.key === 'w' || e.key === 'W') togglePower('reinforce');
   else if (e.key === ' ') { e.preventDefault(); startWave(); }
   else if (e.key === 'p' || e.key === 'P') G.paused = !G.paused;
   else if (e.key === 'u' || e.key === 'U') upgradeTower(selected);
@@ -2176,6 +2375,7 @@ window.addEventListener('keydown', e => {
 // ---------------------------------------------------------------------------
 newGame();
 buildShop();
+buildPowers();
 showCampaign();
 
 let last = performance.now();
