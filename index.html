@@ -1569,7 +1569,7 @@ const POWERS = {
   volley:    { name: 'Arrow Volley',   key: 'Q', cd: 22, radius: 75,
                desc: 'Rain arrows on an area after a short delay. Hits flyers.' },
   reinforce: { name: 'Reinforcements', key: 'W', cd: 30,
-               desc: 'Two footmen hold the road where you click for 12 seconds. Each blocks up to two monsters.' },
+               desc: 'Two footmen run out of the castle to the nearest enemy and hold the road for 12 seconds. Each blocks up to two monsters.' },
 };
 const volleyDamage = () => Math.round(35 + 12 * effWave(Math.max(1, G.wave)));
 
@@ -1585,8 +1585,9 @@ function roadPointNear(x, y, maxD = 36) {
 
 function togglePower(key) {
   if (mode !== 'play' || G.over || G.powerCd[key] > 0) { SFX.play('error', 0.2); return; }
-  aiming = aiming === key ? null : key;
   placing = null; raising = false; closeMenus();
+  if (key === 'reinforce') { aiming = null; castPower(key); return; } // no aiming: the footmen find the enemy
+  aiming = aiming === key ? null : key;
 }
 
 function castPower(key, x, y) {
@@ -1600,13 +1601,16 @@ function castPower(key, x, y) {
     G.strikes.push({ x, y, t: 0.55, arrows, dmg: volleyDamage() });
     SFX.play('volley');
   } else {
-    const p = roadPointNear(x, y);
-    if (!p) { SFX.play('error', 0.2); floatText(x, y, 'Click on the road', '#ffb0a0'); return false; }
+    // Footmen leave the castle gate and run down the road to meet the first enemy.
+    const gate = pointAt(MAP.len);
+    if (!G.monsters.some(m => !m.dead && !MONSTERS[m.type].fly && m.dist > 0)) {
+      SFX.play('error', 0.2); floatText(gate.x, gate.y + 20, 'No enemies on the road', '#ffb0a0'); return false;
+    }
     const hp = Math.round(70 + 22 * effWave(Math.max(1, G.wave)));
     for (const side of [-1, 1]) {
-      G.soldiers.push({ d: p.d + (side > 0 ? 12 : 0), side, hp, maxHp: hp, life: 12, cd: 0, holding: [], swing: 0, x: p.x, y: p.y, ang: 0 });
+      G.soldiers.push({ d: MAP.len - (side > 0 ? 14 : 0), side, hp, maxHp: hp, life: 12, run: 30, cd: 0, holding: [], swing: 0, x: gate.x, y: gate.y, ang: 0, step: 0 });
     }
-    puff(p.x, p.y, '#cfd8ff', 14);
+    puff(gate.x, gate.y, '#cfd8ff', 14);
     SFX.play('march');
   }
   G.powerCd[key] = POWERS[key].cd;
@@ -1632,14 +1636,30 @@ function updateStrikes(dt) {
 function updateSoldiers(dt) {
   for (const so of G.soldiers) {
     so.holding = so.holding.filter(m => !m.dead && m.holder === so);
-    so.life -= dt; so.swing = Math.max(0, so.swing - dt * 4);
+    so.swing = Math.max(0, so.swing - dt * 4);
+    so.moving = false;
+    if (!so.holding.length && so.hp > 0) {
+      // Run toward the nearest ground enemy still coming up the road, 1.5x its speed.
+      let foe = null;
+      for (const m of G.monsters) {
+        if (m.dead || MONSTERS[m.type].fly || m.dist > so.d + 2 || m.dist <= 0) continue;
+        if (!foe || m.dist > foe.dist) foe = m;
+      }
+      if (foe && so.d - foe.dist > 8) {
+        so.d = Math.max(foe.dist + 8, so.d - foe.speed * 1.5 * dt);
+        so.moving = true; so.step += dt * 10; so.run -= dt;
+      } else if (foe && !foe.holder) { foe.holder = so; so.holding.push(foe); }
+    }
+    if (!so.moving || so.run <= 0) so.life -= dt; // the 12 seconds count once they reach the fight
     const p = pointAt(so.d);
     so.x = p.x - Math.sin(p.ang) * so.side * 9; so.y = p.y + Math.cos(p.ang) * so.side * 9; so.ang = p.ang + Math.PI;
     if (so.hp <= 0 && !so.dead) { so.dead = true; puff(so.x, so.y, '#7a0a0a', 10); puff(so.x, so.y, '#9aa6c8', 8); SFX.play('die'); }
     if (so.life <= 0 && !so.gone) { so.gone = true; puff(so.x, so.y, '#cfd8ff', 8); }
     if (so.dead || so.gone) { for (const m of so.holding) m.holder = null; so.holding = []; continue; }
     so.cd -= dt;
-    const foe = so.holding[0];
+    if (so.holding[0] && Math.abs(so.holding[0].dist - so.d) > 10) so.d = so.holding[0].dist + 8;
+    // A footman with nothing to hold helps his partner with the enemy next to him.
+    const foe = so.holding[0] || G.monsters.find(m => !m.dead && m.holder && Math.abs(m.dist - so.d) < 14);
     if (foe && so.cd <= 0) {
       so.cd = 0.7; so.swing = 1;
       damage(foe, Math.round(10 + 3 * effWave(Math.max(1, G.wave))), null);
@@ -1658,6 +1678,10 @@ function drawSoldier(so) {
   ctx.strokeStyle = '#e4e8ec'; ctx.lineWidth = 2;
   const sw = so.swing * 1.2;
   ctx.beginPath(); ctx.moveTo(2, 6); ctx.lineTo(2 + Math.cos(0.9 - sw) * 15, 6 + Math.sin(0.9 - sw) * 15 - 6); ctx.stroke();
+  if (so.moving) { // legs while running
+    const k = Math.sin(so.step) * 5;
+    ctx.fillStyle = '#3a2a1a'; circle(ctx, k, -4, 2.6); circle(ctx, -k, 4, 2.6);
+  }
   ctx.fillStyle = '#2d4f9e'; circle(ctx, 0, 0, 8.5);                 // blue tabard
   ctx.fillStyle = '#e8b84a'; ctx.fillRect(-1, -6, 2, 12); ctx.fillRect(-5, -1, 10, 2); // gold cross
   ctx.fillStyle = '#8f98a8'; circle(ctx, 1, 0, 4.5);                 // helmet
@@ -2485,7 +2509,7 @@ function draw() {
 
   if (aiming && mode === 'play' && !G.over) { // tell the player what to do next
     const tap = lastPointer === 'touch' ? 'Tap' : 'Click';
-    const msg = aiming === 'volley' ? `${tap} where the arrows should fall` : `${tap} on the road to send footmen`;
+    const msg = `${tap} where the arrows should fall`;
     ctx.font = 'bold 22px Georgia'; ctx.textAlign = 'center';
     ctx.fillStyle = 'rgba(20,14,6,.8)'; ctx.fillRect(0, H - 214, W, 40);
     ctx.fillStyle = '#e8b84a'; ctx.fillText(msg, W / 2, H - 186);
